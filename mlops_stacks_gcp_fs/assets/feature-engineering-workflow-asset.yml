@@ -4,7 +4,7 @@ new_cluster: &new_cluster
     spark_version: 13.3.x-cpu-ml-scala2.12
     node_type_id: n2-highmem-4
     custom_tags:
-      clusterSource: mlops-stack/0.2
+      clusterSource: mlops-stack
 
 common_permissions: &permissions
   permissions:
