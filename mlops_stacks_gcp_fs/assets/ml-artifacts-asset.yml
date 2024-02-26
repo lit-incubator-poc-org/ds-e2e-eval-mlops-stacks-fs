@@ -1,0 +1,54 @@
+# Deployment target specific values
+targets:
+  dev:
+    resources:
+      models:
+        model:
+          description: MLflow registered model for the "mlops_stacks_gcp_fs" ML Project for ${bundle.target} deployment target.
+
+  test:
+    resources:
+      models:
+        model:
+          description: MLflow registered model for the "mlops_stacks_gcp_fs" ML Project for ${bundle.target} deployment target.
+
+  staging:
+    resources:
+      models:
+        model:
+          description: MLflow registered model for the "mlops_stacks_gcp_fs" ML Project for ${bundle.target} deployment target.
+
+  prod:
+    resources:
+      models:
+        model:
+          description: |
+            MLflow registered model for the "mlops_stacks_gcp_fs" ML Project. See the corresponding [Git repo]($#{var.git_repo_url}) for details on the project.
+
+            Links:
+              * [Recurring model training job](https://416411475796958.8.gcp.databricks.com#job/${resources.jobs.model_training_job.id}): trains fresh model versions using the latest ML code.
+              * [Recurring batch inference job](https://416411475796958.8.gcp.databricks.com#job/${resources.jobs.batch_inference_job.id}): applies the latest ${bundle.target} model version for batch inference.
+
+# Allow users to read the experiment and the model
+common_permissions: &permissions
+  permissions:
+    - level: CAN_READ
+      group_name: users
+
+
+
+# Defines model and experiments
+resources:
+  models:
+    model:
+      name: ${var.model_name}
+      <<: *permissions
+      depends_on:
+        - resources.jobs.model_training_job.id
+        - resources.jobs.batch_inference_job.id
+
+  experiments:
+    experiment:
+      name: ${var.experiment_name}
+      <<: *permissions
+      description: MLflow Experiment used to track runs for mlops_stacks_gcp_fs project.
