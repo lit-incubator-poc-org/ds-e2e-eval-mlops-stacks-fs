@@ -17,7 +17,7 @@ resources:
       name: ${bundle.target}-mlops_stacks_gcp_fs-batch-inference-job
       tasks:
         - task_key: batch_inference_job
-          existing_cluster_id: "0905-154252-702nkcbm"
+          existing_cluster_id: ${var.existing_cluster_id}
           notebook_task:
             notebook_path: ../deployment/batch_inference/notebooks/BatchInference.py
             base_parameters:

@@ -57,8 +57,15 @@ ID                    Name                                                      
 0905-154252-702nkcbm  Curran, Simon (LIT)'s Personal Compute Cluster 2025-09-05 16:42:27  RUNNING
 ```
 
-### Update 
+### Update Cluster ID in databricks.yml
 
+In databricks.yml, update the existing_cluster_id:
+
+```
+  existing_cluster_id:
+    description: Existing cluster ID to use for job execution
+    default: "0905-154252-702nkcbm"
+```
 
 
 ### Run the Feature Engineering Job

@@ -17,7 +17,7 @@ resources:
       name: ${bundle.target}-mlops_stacks_gcp_fs-write-feature-table-job
       tasks:
         - task_key: PickupFeatures
-          existing_cluster_id: "0905-154252-702nkcbm"
+          existing_cluster_id: ${var.existing_cluster_id}
           notebook_task:
             notebook_path: ../feature_engineering/notebooks/GenerateAndWriteFeatures.py
             base_parameters:
@@ -33,7 +33,7 @@ resources:
               # git source information of current ML asset deployment. It will be persisted as part of the workflow run
               git_source_info: url:${bundle.git.origin_url}; branch:${bundle.git.branch}; commit:${bundle.git.commit}
         - task_key: DropoffFeatures
-          existing_cluster_id: "0905-154252-702nkcbm"
+          existing_cluster_id: ${var.existing_cluster_id}
           notebook_task:
             notebook_path: ../feature_engineering/notebooks/GenerateAndWriteFeatures.py
             base_parameters:

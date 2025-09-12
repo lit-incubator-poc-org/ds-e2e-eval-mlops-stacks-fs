@@ -9,6 +9,9 @@ variables:
   model_name:
     description: Model name for the model training.
     default: ${bundle.target}-mlops_stacks_gcp_fs-model
+  existing_cluster_id:
+    description: Existing cluster ID to use for job execution
+    default: "0905-154252-702nkcbm"
 
 include:
   # Assets folder contains ML artifact assets for the ml project that defines model and experiment

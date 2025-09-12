@@ -53,9 +53,10 @@ dbutils.widgets.text(
 # MLflow experiment name.
 dbutils.widgets.text(
     "experiment_name",
-    f"/Users/simon.curran@liberty-it.co.uk/mlops-stacks-taxi-trips-experiment",
+    "default-experiment",
     label="MLflow experiment name",
 )
+
 # MLflow registered model name to use for the trained mode.
 dbutils.widgets.text(
     "model_name", "dev-mlops-stacks-taxi-trips-model", label="Model Name"
