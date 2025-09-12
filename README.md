@@ -31,6 +31,8 @@ Then, in the Databricks plugin view, select the Cluster.
 
 ## Feature Engineering
 
+## Manually Running (Works)
+
 **N.B.** This project was setup to run on GCP.  I am working through converting to run on Azure.
 
 Navigate to: 
@@ -39,6 +41,40 @@ mlops_stacks_gcp_fs/feature_engineering/notebooks/GenerateAndWriteFeatures.py
 ```
 
 Right click -> Run on Databricks -> Run as Workflow
+
+## Running Using Databricks Bundle (Does not currently work)
+
+### List your available Compute (Clusters)
+
+```
+databricks clusters list
+```
+
+**Example Output:**
+
+```
+ID                    Name                                                                State
+0905-154252-702nkcbm  Curran, Simon (LIT)'s Personal Compute Cluster 2025-09-05 16:42:27  RUNNING
+```
+
+### Update 
+
+
+
+### Run the Feature Engineering Job
+
+```bash
+databricks bundle deploy
+```
+
+```bash
+databricks bundle run write_feature_table_job
+```
+
+Or, you can use the **Bundle Resource Explorer**
+
+Right click on the `dev-mlops_stacks_gcp_fs-write-feature-table-job` -> Deploy the bundle and run the job
+
 
 ## Train a Model (Working in Progress)
 

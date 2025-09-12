@@ -2,7 +2,7 @@ new_cluster: &new_cluster
   new_cluster:
     num_workers: 3
     spark_version: 13.3.x-cpu-ml-scala2.12
-    node_type_id: n2-highmem-4
+    node_type_id: Standard_D4s_v3
     custom_tags:
       clusterSource: mlops-stack
 
@@ -15,12 +15,9 @@ resources:
   jobs:
     model_training_job:
       name: ${bundle.target}-mlops_stacks_gcp_fs-model-training-job
-      job_clusters:
-        - job_cluster_key: model_training_job_cluster
-          <<: *new_cluster
       tasks:
         - task_key: Train
-          job_cluster_key: model_training_job_cluster
+          existing_cluster_id: "0905-154252-702nkcbm"
           notebook_task:
             notebook_path: ../training/notebooks/TrainWithFeatureStore.py
             base_parameters:
@@ -29,12 +26,12 @@ resources:
               training_data_path: /databricks-datasets/nyctaxi-with-zipcodes/subsampled
               experiment_name: ${var.experiment_name}
               model_name: ${var.model_name}
-              pickup_features_table: e2e_demo_simon.${bundle.target}_mlops_stacks_gcp_fs_trip_pickup_features
-              dropoff_features_table: e2e_demo_simon.${bundle.target}_mlops_stacks_gcp_fs_trip_dropoff_features
+              pickup_features_table: e2e_demo_simon.trip_pickup_features
+              dropoff_features_table: e2e_demo_simon.trip_dropoff_features
               # git source information of current ML asset deployment. It will be persisted as part of the workflow run
               git_source_info: url:${bundle.git.origin_url}; branch:${bundle.git.branch}; commit:${bundle.git.commit}
         - task_key: ModelValidation
-          job_cluster_key: model_training_job_cluster
+          existing_cluster_id: "0905-154252-702nkcbm"
           depends_on:
             - task_key: Train
           notebook_task:
@@ -77,7 +74,7 @@ resources:
               # git source information of current ML asset deployment. It will be persisted as part of the workflow run
               git_source_info: url:${bundle.git.origin_url}; branch:${bundle.git.branch}; commit:${bundle.git.commit}
         - task_key: ModelDeployment
-          job_cluster_key: model_training_job_cluster
+          existing_cluster_id: "0905-154252-702nkcbm"
           depends_on:
             - task_key: ModelValidation
           notebook_task:

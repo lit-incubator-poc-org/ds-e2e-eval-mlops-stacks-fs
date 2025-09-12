@@ -2,7 +2,7 @@ new_cluster: &new_cluster
   new_cluster:
     num_workers: 2
     spark_version: 13.3.x-cpu-ml-scala2.12
-    node_type_id: n2-highmem-4
+    node_type_id: Standard_D4s_v3
     custom_tags:
       clusterSource: mlops-stack
 
@@ -17,7 +17,7 @@ resources:
       name: ${bundle.target}-mlops_stacks_gcp_fs-batch-inference-job
       tasks:
         - task_key: batch_inference_job
-          <<: *new_cluster
+          existing_cluster_id: "0905-154252-702nkcbm"
           notebook_task:
             notebook_path: ../deployment/batch_inference/notebooks/BatchInference.py
             base_parameters:
