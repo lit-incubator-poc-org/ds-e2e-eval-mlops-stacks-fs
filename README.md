@@ -8,7 +8,7 @@ Code -> Settings -> Extensions
 
 Search for "Databricks" and install it.
 
-Select the Plugin down the left hand side of VS Code and use the "Create Configuration" button to authenticate with Databricks.  See [authentication](https://docs.databricks.com/aws/en/dev-tools/vscode-ext/authentication).
+Select the Plugin down the left hand side of VS Code and use the "Create Configuration" button to authenticate, using a Personal Access Token (PAT), with Databricks.  See [authentication](https://docs.databricks.com/aws/en/dev-tools/vscode-ext/authentication).
 
 There are other good resources at the bottom left of the plugin view in the "Documentation" section.
 
@@ -20,6 +20,18 @@ See https://docs.databricks.com/aws/en/dev-tools/cli/install
 brew tap databricks/tap
 brew install databricks
 ```
+
+### Authenticate the Databricks CLI
+
+Reuse your Personal Access Token (PAT) from "Install the VS Code Databrick Plugin " above.  You can also create a new one if you did not save it.
+
+```
+export DATABRICKS_HOST=https://adb-8490988242777396.16.azuredatabricks.net
+export DATABRICKS_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+_**N.B.** You can also add to you bash_profile or zprofile to save for future use._
+
 
 # Working with Databricks
 
