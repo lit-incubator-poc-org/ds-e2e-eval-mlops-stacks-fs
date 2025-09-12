@@ -3,7 +3,7 @@
 def get_deployed_model_stage_for_env(env):
     """
     Get the model version stage under which the latest deployed model version can be found
-    for the current environment
+    for the current environment (Legacy workspace model registry)
     :param env: Current environment
     :return: Model version stage
     """
@@ -19,3 +19,20 @@ def get_deployed_model_stage_for_env(env):
         "test": "Production",
     }
     return _MODEL_STAGE_FOR_ENV[env]
+
+
+def get_deployed_model_alias_for_env(env):
+    """
+    Get the model alias for Unity Catalog model deployment for the current environment
+    :param env: Current environment
+    :return: Model alias for Unity Catalog
+    """
+    # For Unity Catalog, we use aliases instead of stages for model deployment
+    # Use environment-specific aliases for better deployment management
+    _MODEL_ALIAS_FOR_ENV = {
+        "dev": "dev",
+        "staging": "staging", 
+        "prod": "prod",
+        "test": "test",
+    }
+    return _MODEL_ALIAS_FOR_ENV[env]

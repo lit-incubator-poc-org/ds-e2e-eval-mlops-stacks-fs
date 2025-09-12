@@ -1,33 +1,4 @@
-# Deployment target specific values
-targets:
-  dev:
-    resources:
-      models:
-        model:
-          description: MLflow registered model for the "mlops_stacks_gcp_fs" ML Project for ${bundle.target} deployment target.
-
-  test:
-    resources:
-      models:
-        model:
-          description: MLflow registered model for the "mlops_stacks_gcp_fs" ML Project for ${bundle.target} deployment target.
-
-  staging:
-    resources:
-      models:
-        model:
-          description: MLflow registered model for the "mlops_stacks_gcp_fs" ML Project for ${bundle.target} deployment target.
-
-  prod:
-    resources:
-      models:
-        model:
-          description: |
-            MLflow registered model for the "mlops_stacks_gcp_fs" ML Project. See the corresponding [Git repo]($#{var.git_repo_url}) for details on the project.
-
-            Links:
-              * [Recurring model training job](https://adb-8490988242777396.16.azuredatabricks.net#job/${resources.jobs.model_training_job.id}): trains fresh model versions using the latest ML code.
-              * [Recurring batch inference job](https://adb-8490988242777396.16.azuredatabricks.net#job/${resources.jobs.batch_inference_job.id}): applies the latest ${bundle.target} model version for batch inference.
+# Unity Catalog models are created automatically when logged, no pre-creation needed
 
 # Allow users to read the experiment and the model
 common_permissions: &permissions
@@ -39,16 +10,16 @@ common_permissions: &permissions
 
 # Defines model and experiments
 resources:
-  models:
-    model:
-      name: ${var.model_name}
-      <<: *permissions
-      depends_on:
-        - resources.jobs.model_training_job.id
-        - resources.jobs.batch_inference_job.id
+  # Unity Catalog models are created automatically when logged, no need to pre-create them
+  # models:
+  #   model:
+  #     name: ${var.model_name}
+  #     <<: *permissions
+  #     depends_on:
+  #       - resources.jobs.model_training_job.id
+  #       - resources.jobs.batch_inference_job.id
 
   experiments:
     experiment:
       name: ${var.experiment_name}
       <<: *permissions
-      description: MLflow Experiment used to track runs for mlops_stacks_gcp_fs project.

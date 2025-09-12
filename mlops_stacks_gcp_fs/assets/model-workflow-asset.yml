@@ -26,8 +26,9 @@ resources:
               training_data_path: /databricks-datasets/nyctaxi-with-zipcodes/subsampled
               experiment_name: ${var.experiment_name}
               model_name: ${var.model_name}
-              pickup_features_table: e2e_demo_simon.trip_pickup_features
-              dropoff_features_table: e2e_demo_simon.trip_dropoff_features
+              schema_name: ${var.schema_name}
+              pickup_features_table: ${var.schema_name}.trip_pickup_features
+              dropoff_features_table: ${var.schema_name}.trip_dropoff_features
               # git source information of current ML asset deployment. It will be persisted as part of the workflow run
               git_source_info: url:${bundle.git.origin_url}; branch:${bundle.git.branch}; commit:${bundle.git.commit}
         - task_key: ModelValidation

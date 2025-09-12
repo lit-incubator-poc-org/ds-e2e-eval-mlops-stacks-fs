@@ -50,6 +50,13 @@ dbutils.widgets.text(
     label="Path to the training data",
 )
 
+# Schema name.
+dbutils.widgets.text(
+    "schema_name",
+    "default-schema",
+    label="Schema name",
+)
+
 # MLflow experiment name.
 dbutils.widgets.text(
     "experiment_name",
@@ -59,20 +66,20 @@ dbutils.widgets.text(
 
 # MLflow registered model name to use for the trained mode.
 dbutils.widgets.text(
-    "model_name", "dev-mlops-stacks-taxi-trips-model", label="Model Name"
+    "model_name", "default_model", label="Model Name"
 )
 
 # Pickup features table name
 dbutils.widgets.text(
     "pickup_features_table",
-    "e2e_demo_simon.trip_pickup_features",
+    "p03.e2e_demo_simon.trip_pickup_features",
     label="Pickup Features Table",
 )
 
 # Dropoff features table name
 dbutils.widgets.text(
     "dropoff_features_table",
-    "e2e_demo_simon.trip_dropoff_features",
+    "p03.e2e_demo_simon.trip_dropoff_features",
     label="Dropoff Features Table",
 )
 
@@ -80,6 +87,7 @@ dbutils.widgets.text(
 # DBTITLE 1,Define input and output variables
 
 input_table_path = dbutils.widgets.get("training_data_path")
+schema_name = dbutils.widgets.get("schema_name")
 experiment_name = dbutils.widgets.get("experiment_name")
 model_name = dbutils.widgets.get("model_name")
 
@@ -269,7 +277,7 @@ fs.log_model(
     artifact_path="model_packaged",
     flavor=mlflow.lightgbm,
     training_set=training_set,
-    registered_model_name=model_name,
+    registered_model_name=model_name,  # Model name already contains the full Unity Catalog name
 )
 
 # The returned model URI is needed by the model deployment notebook.

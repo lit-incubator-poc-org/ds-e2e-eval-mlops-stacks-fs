@@ -6,9 +6,12 @@ variables:
   experiment_name:
     description: Experiment name for the model training.
     default: /Users/${workspace.current_user.userName}/${bundle.target}-mlops_stacks_gcp_fs-experiment-v2
+  schema_name:
+    description: The schema to use for feature tables, models etc.
+    default: p03.e2e_demo_simon
   model_name:
     description: Model name for the model training.
-    default: ${bundle.target}-mlops_stacks_gcp_fs-model
+    default: ${var.schema_name}.${bundle.target}_mlops_stacks_gcp_fs_model
   existing_cluster_id:
     description: Existing cluster ID to use for job execution
     default: "0905-154252-702nkcbm"
