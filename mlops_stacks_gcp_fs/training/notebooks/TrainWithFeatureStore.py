@@ -108,12 +108,11 @@ raw_data.display()
 # COMMAND ----------
 # DBTITLE 1, Helper functions
 
+import pyspark.sql.functions as F
+from pyspark.sql.types import IntegerType
 from datetime import timedelta, timezone
 import math
 import mlflow.pyfunc
-import pyspark.sql.functions as F
-from pyspark.sql.types import IntegerType
-
 
 def rounded_unix_timestamp(dt, num_minutes=15):
     """
@@ -123,35 +122,31 @@ def rounded_unix_timestamp(dt, num_minutes=15):
     delta = math.ceil(nsecs / (60 * num_minutes)) * (60 * num_minutes) - nsecs
     return int((dt + timedelta(seconds=delta)).replace(tzinfo=timezone.utc).timestamp())
 
-
+# Create UDF for use in Spark
 rounded_unix_timestamp_udf = F.udf(rounded_unix_timestamp, IntegerType())
 
-
-def rounded_taxi_data(taxi_data_df):
-    # Round the taxi data timestamp to 15 and 30 minute intervals so we can join with the pickup and dropoff features
-    # respectively.
-    taxi_data_df = (
-        taxi_data_df.withColumn(
+def add_rounded_timestamps(df, pickup_minutes=15, dropoff_minutes=30):
+    """
+    Add rounded timestamp columns to taxi data for feature store lookups.
+    """
+    return (
+        df.withColumn(
             "rounded_pickup_datetime",
             F.to_timestamp(
                 rounded_unix_timestamp_udf(
-                    taxi_data_df["tpep_pickup_datetime"], F.lit(15)
+                    df["tpep_pickup_datetime"], F.lit(pickup_minutes)
                 )
             ),
         )
         .withColumn(
-            "rounded_dropoff_datetime",
+            "rounded_dropoff_datetime", 
             F.to_timestamp(
                 rounded_unix_timestamp_udf(
-                    taxi_data_df["tpep_dropoff_datetime"], F.lit(30)
+                    df["tpep_dropoff_datetime"], F.lit(dropoff_minutes)
                 )
             ),
         )
-        .drop("tpep_pickup_datetime")
-        .drop("tpep_dropoff_datetime")
     )
-    taxi_data_df.createOrReplaceTempView("taxi_data")
-    return taxi_data_df
 
 
 def get_latest_model_version(model_name):
@@ -167,7 +162,13 @@ def get_latest_model_version(model_name):
 # COMMAND ----------
 # DBTITLE 1, Read taxi data for training
 
-taxi_data = rounded_taxi_data(raw_data)
+# Add rounded timestamps for feature store lookups, then drop original timestamps for training
+taxi_data = (
+    add_rounded_timestamps(raw_data)
+    .drop("tpep_pickup_datetime")
+    .drop("tpep_dropoff_datetime")
+)
+taxi_data.createOrReplaceTempView("taxi_data")
 taxi_data.display()
 
 # COMMAND ----------

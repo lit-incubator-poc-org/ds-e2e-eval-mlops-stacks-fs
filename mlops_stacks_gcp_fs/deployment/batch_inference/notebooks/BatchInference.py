@@ -97,9 +97,68 @@ from datetime import datetime
 ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 # COMMAND ----------
-# DBTITLE 1,Load model and run inference
+# DBTITLE 1,Data preprocessing and inference
 
-from predict import predict_batch
+import pyspark.sql.functions as F
+from pyspark.sql.types import IntegerType
+from pyspark.sql.functions import lit, to_timestamp
+from datetime import timedelta, timezone
+import math
 
-predict_batch(spark, model_uri, input_table_name, output_table_name, model_version, ts)
+def rounded_unix_timestamp(dt, num_minutes=15):
+    """
+    Ceilings datetime dt to interval num_minutes, then returns the unix timestamp.
+    """
+    nsecs = dt.minute * 60 + dt.second + dt.microsecond * 1e-6
+    delta = math.ceil(nsecs / (60 * num_minutes)) * (60 * num_minutes) - nsecs
+    return int((dt + timedelta(seconds=delta)).replace(tzinfo=timezone.utc).timestamp())
+
+# Create UDF for use in Spark
+rounded_unix_timestamp_udf = F.udf(rounded_unix_timestamp, IntegerType())
+
+def add_rounded_timestamps(df, pickup_minutes=15, dropoff_minutes=30):
+    """
+    Add rounded timestamp columns to taxi data for feature store lookups.
+    """
+    return (
+        df.withColumn(
+            "rounded_pickup_datetime",
+            F.to_timestamp(
+                rounded_unix_timestamp_udf(
+                    df["tpep_pickup_datetime"], F.lit(pickup_minutes)
+                )
+            ),
+        )
+        .withColumn(
+            "rounded_dropoff_datetime", 
+            F.to_timestamp(
+                rounded_unix_timestamp_udf(
+                    df["tpep_dropoff_datetime"], F.lit(dropoff_minutes)
+                )
+            ),
+        )
+    )
+
+# Import utility functions that don't contain UDFs
+from predict import load_input_table, predict_batch_with_preprocessed_data
+
+# Load input data using shared utility
+raw_table = load_input_table(spark, input_table_name)
+
+# Preprocess the data to match the training data schema using inline UDF logic
+# For inference, we just need to add rounded timestamps (keeping originals for potential downstream use)
+table = add_rounded_timestamps(raw_table)
+
+# COMMAND ----------
+# DBTITLE 1,Run inference
+
+# Use the centralized prediction logic (UDF-free)
+predict_batch_with_preprocessed_data(
+    model_uri=model_uri,
+    preprocessed_table=table,
+    output_table_name=output_table_name,
+    model_version=model_version,
+    ts=ts
+)
+
 dbutils.notebook.exit(output_table_name)
