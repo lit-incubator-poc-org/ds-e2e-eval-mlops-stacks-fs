@@ -55,8 +55,8 @@ jobs in staging and production will automatically use your updated ML code.
 
 You can track the state of the ML pipelines for the current project from the MLflow registered model UI. Links:
 
-* [Staging workspace registered model](https://416411475796958.8.gcp.databricks.com/ml/models/staging-mlops_stacks_gcp_fs-model)
-* [Prod workspace registered model](https://416411475796958.8.gcp.databricks.com/ml/models/prod-mlops_stacks_gcp_fs-model). 
+* [Staging workspace registered model](https://adb-8490988242777396.16.azuredatabricks.net/ml/models/staging-mlops_stacks_gcp_fs-model)
+* [Prod workspace registered model](https://adb-8490988242777396.16.azuredatabricks.net/ml/models/prod-mlops_stacks_gcp_fs-model). 
 
 In both the staging and prod workspaces, the MLflow registered model contains links to:
 * The model versions produced through automated retraining

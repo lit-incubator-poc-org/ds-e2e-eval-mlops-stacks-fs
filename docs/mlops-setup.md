@@ -40,8 +40,8 @@ git push upstream main
 ### Prerequisites
 * You must be an account admin to add service principals to the account.
 * You must be a Databricks workspace admin in the staging and prod workspaces. Verify that you're an admin by viewing the
-  [staging workspace admin console](https://416411475796958.8.gcp.databricks.com#setting/accounts) and
-  [prod workspace admin console](https://416411475796958.8.gcp.databricks.com#setting/accounts). If
+  [staging workspace admin console](https://adb-8490988242777396.16.azuredatabricks.net#setting/accounts) and
+  [prod workspace admin console](https://adb-8490988242777396.16.azuredatabricks.net#setting/accounts). If
   the admin console UI loads instead of the Databricks workspace homepage, you are an admin.
 
 ### Set up authentication for CI/CD
