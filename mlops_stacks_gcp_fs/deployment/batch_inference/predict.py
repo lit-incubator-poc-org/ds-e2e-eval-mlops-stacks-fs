@@ -10,7 +10,13 @@ def predict_batch(
     writing results to the table with name output_table_name
     """
     
-    table = spark_session.table(input_table_name)
+    # Handle both table names and file paths
+    if input_table_name.startswith("/"):
+        # It's a file path, read as parquet/delta
+        table = spark_session.read.format("delta").load(input_table_name)
+    else:
+        # It's a table name
+        table = spark_session.table(input_table_name)
     
     from databricks.feature_store import FeatureStoreClient
     

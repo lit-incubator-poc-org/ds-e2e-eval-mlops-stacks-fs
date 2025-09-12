@@ -59,7 +59,7 @@ sys.path.append("../..")
 # COMMAND ----------
 
 # DBTITLE 1,Define input and output variables
-from utils import get_deployed_model_stage_for_env
+from utils import get_deployed_model_alias_for_env
 
 env = dbutils.widgets.get("env")
 input_table_name = dbutils.widgets.get("input_table_name")
@@ -68,20 +68,26 @@ model_name = dbutils.widgets.get("model_name")
 assert input_table_name != "", "input_table_name notebook parameter must be specified"
 assert output_table_name != "", "output_table_name notebook parameter must be specified"
 assert model_name != "", "model_name notebook parameter must be specified"
-stage = get_deployed_model_stage_for_env(env)
-model_uri = f"models:/{model_name}/{stage}"
+alias = get_deployed_model_alias_for_env(env)
+model_uri = f"models:/{model_name}@{alias}"
 
 # COMMAND ----------
 
 from mlflow import MlflowClient
 
-# Get model version from stage
-model_version_infos = MlflowClient().search_model_versions("name = '%s'" % model_name)
-model_version = max(
-    int(version.version)
-    for version in model_version_infos
-    if version.current_stage == stage
-)
+# Get model version from alias
+client = MlflowClient()
+try:
+    # Get the model version by alias for Unity Catalog
+    model_version_by_alias = client.get_model_version_by_alias(model_name, alias)
+    model_version = int(model_version_by_alias.version)
+except Exception:
+    # Fallback: get the latest version if alias doesn't exist
+    model_version_infos = client.search_model_versions("name = '%s'" % model_name)
+    if model_version_infos:
+        model_version = max(int(version.version) for version in model_version_infos)
+    else:
+        raise ValueError(f"No model versions found for model {model_name}")
 
 # COMMAND ----------
 
