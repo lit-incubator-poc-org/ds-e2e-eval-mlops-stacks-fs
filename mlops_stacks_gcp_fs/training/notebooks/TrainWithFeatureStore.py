@@ -64,14 +64,14 @@ dbutils.widgets.text(
 # Pickup features table name
 dbutils.widgets.text(
     "pickup_features_table",
-    "feature_store_taxi_example.trip_pickup_features",
+    "e2e_demo_simon.trip_pickup_features",
     label="Pickup Features Table",
 )
 
 # Dropoff features table name
 dbutils.widgets.text(
     "dropoff_features_table",
-    "feature_store_taxi_example.trip_dropoff_features",
+    "e2e_demo_simon.trip_dropoff_features",
     label="Dropoff Features Table",
 )
 

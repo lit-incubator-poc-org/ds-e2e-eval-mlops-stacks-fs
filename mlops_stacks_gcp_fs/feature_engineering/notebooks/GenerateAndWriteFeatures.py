@@ -21,7 +21,8 @@
 # *
 # * features_transform_module (required) - Python module containing the feature transform logic.
 ##################################################################################
-
+import logging
+logger = logging.getLogger()
 
 # List of input args needed to run this notebook as a job.
 # Provide them via DB widgets or notebook arguments.
@@ -45,7 +46,7 @@ dbutils.widgets.text(
 # Feature table to store the computed features.
 dbutils.widgets.text(
     "output_table_name",
-    "feature_store_taxi_example.trip_pickup_features",
+    "e2e_demo_simon.trip_pickup_features",
     label="Output Feature Table Name",
 )
 
@@ -135,5 +136,6 @@ fs.write_table(
     df=features_df,
     mode="merge",
 )
+logger.info(f"Wrote features to table {output_table_name}")
 
 dbutils.notebook.exit(0)
