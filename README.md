@@ -1,4 +1,58 @@
-# mlops_stacks_gcp_fs
+# Setup
+
+## Install the VS Code Databrick Plugin 
+
+```
+Code -> Settings -> Extensions
+```
+
+Search for "Databricks" and install it.
+
+Select the Plugin down the left hand side of VS Code and use the "Create Configuration" button to authenticate with Databricks.  See [authentication](https://docs.databricks.com/aws/en/dev-tools/vscode-ext/authentication).
+
+There are other good resources at the bottom left of the plugin view in the "Documentation" section.
+
+
+## Install the Databricks CLI
+
+See https://docs.databricks.com/aws/en/dev-tools/cli/install
+```
+brew tap databricks/tap
+brew install databricks
+```
+
+# Working with Databricks
+
+## Attach a Cluster
+
+If you have not already done so, you will need to create Compute on the Databricks UI.
+
+Then, in the Databricks plugin view, select the Cluster.
+
+## Feature Engineering
+
+**N.B.** This project was setup to run on GCP.  I am working through converting to run on Azure.
+
+Navigate to: 
+```
+mlops_stacks_gcp_fs/feature_engineering/notebooks/GenerateAndWriteFeatures.py
+```
+
+Right click -> Run on Databricks -> Run as Workflow
+
+## Train a Model (Working in Progress)
+
+Navigate to: 
+```
+mlops_stacks_gcp_fs/training/notebooks/TrainWithFeatureStore.py
+```
+
+Right click -> Run on Databricks -> Run as Workflow
+
+_**N.B.** This is currently failing because the feature engineering step has not create the dropoff features table for some reason._
+
+
+# Project Overview
 
 This directory contains an ML project based on the default
 [Databricks MLOps Stacks](https://github.com/databricks/mlops-stacks),

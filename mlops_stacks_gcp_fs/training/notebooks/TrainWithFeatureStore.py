@@ -53,12 +53,12 @@ dbutils.widgets.text(
 # MLflow experiment name.
 dbutils.widgets.text(
     "experiment_name",
-    f"/dev-mlops_stacks_gcp_fs-experiment",
+    f"/Users/simon.curran@liberty-it.co.uk/mlops-stacks-taxi-trips-experiment",
     label="MLflow experiment name",
 )
 # MLflow registered model name to use for the trained mode.
 dbutils.widgets.text(
-    "model_name", "dev-mlops_stacks_gcp_fs-model", label="Model Name"
+    "model_name", "dev-mlops-stacks-taxi-trips-model", label="Model Name"
 )
 
 # Pickup features table name
