@@ -23,7 +23,6 @@
   - [Real-time API Inference](#4-real-time-api-inference)
 - [🔄 What Happens During Inference](#-what-happens-during-inference)
   - [Step-by-Step Flow](#step-by-step-inference-flow)
-  - [Performance & Error Handling](#-performance-characteristics)
 - [🛠️ Development Tools](#️-development-tools)
 - [🚀 Getting Started](#-getting-started)
 
@@ -864,32 +863,6 @@ WHERE zip = '10019'
 - **Model Inference**: ~10-20ms for LightGBM
 - **Network/Serialization**: ~20-100ms
 
-### **🚨 Error Handling**
-
-**Common Issues & Responses**:
-
-1. **Missing Features**:
-   ```json
-   {
-     "error": "Feature not found for zip=99999 at timestamp=2025-09-13T14:30:00",
-     "fallback": "Uses historical average for missing features"
-   }
-   ```
-
-2. **Invalid Timestamps**:
-   ```json
-   {
-     "error": "Invalid timestamp format. Expected ISO 8601: YYYY-MM-DDTHH:MM:SS"
-   }
-   ```
-
-3. **Model Version Issues**:
-   ```json
-   {
-     "error": "Model version 9 not found",
-     "fallback": "Using latest available version"
-   }
-   ```
 
 ## 🛠️ Development Tools
 
