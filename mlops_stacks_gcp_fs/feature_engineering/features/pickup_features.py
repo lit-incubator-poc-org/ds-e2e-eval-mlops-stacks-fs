@@ -4,7 +4,6 @@ You should plug in your own features computation logic in the compute_features_f
 """
 import pyspark.sql.functions as F
 from pyspark.sql.types import FloatType, IntegerType, StringType, TimestampType
-from pytz import timezone
 
 
 @F.udf(returnType=StringType())

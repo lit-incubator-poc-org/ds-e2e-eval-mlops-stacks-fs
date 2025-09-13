@@ -109,43 +109,13 @@ raw_data.display()
 # DBTITLE 1, Helper functions
 
 import pyspark.sql.functions as F
-from pyspark.sql.types import IntegerType
-from datetime import timedelta, timezone
-import math
 import sys
-# Add the features directory to the Python path (relative to notebook location)
-sys.path.append("../../feature_engineering/features")
+# Add the feature_engineering directory to the Python path (relative to notebook location)
+sys.path.append("../../feature_engineering")
 
-# Import only the DataFrame transformation functions (not UDF functions)
-import shared_feature_utils as fe
-add_rounded_timestamps_direct = fe.add_rounded_timestamps_direct
+# Import consolidated feature engineering functions
+from feature_engineering_utils import add_rounded_timestamps
 import mlflow.pyfunc
-
-# Define UDF function directly in notebook (required for Spark serialization)
-def rounded_unix_timestamp(dt, num_minutes=15):
-    """
-    Ceilings datetime dt to interval num_minutes, then returns the unix timestamp.
-    
-    Args:
-        dt: datetime object
-        num_minutes: interval in minutes to round to (default: 15)
-    
-    Returns:
-        Unix timestamp as integer
-    """
-    nsecs = dt.minute * 60 + dt.second + dt.microsecond * 1e-6
-    delta = math.ceil(nsecs / (60 * num_minutes)) * (60 * num_minutes) - nsecs
-    return int((dt + timedelta(seconds=delta)).replace(tzinfo=timezone.utc).timestamp())
-
-# Create UDF locally in notebook (required for Spark serialization)
-rounded_unix_timestamp_udf = F.udf(rounded_unix_timestamp, IntegerType())
-
-# Create the add_rounded_timestamps function using shared logic
-def add_rounded_timestamps(df, pickup_minutes=15, dropoff_minutes=30):
-    """
-    Add rounded timestamp columns to taxi data for feature store lookups using shared logic.
-    """
-    return add_rounded_timestamps_direct(df, rounded_unix_timestamp_udf, pickup_minutes, dropoff_minutes)
 
 
 def get_latest_model_version(model_name):
