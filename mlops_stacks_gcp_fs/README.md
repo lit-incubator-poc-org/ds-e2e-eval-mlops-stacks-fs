@@ -32,6 +32,49 @@ This enables taxi companies and ride-sharing services to:
 └─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
 
+## 🔄 MLOps Pipeline Workflows
+
+### **1. Feature Engineering Job** (`feature-engineering-workflow-asset.yml`)
+- Computes and updates feature store tables
+- Runs on schedule or triggered by new data
+- Maintains feature freshness and data quality
+
+### **2. Model Training Job** (`model-workflow-asset.yml`)  
+- Trains new model versions
+- Validates model performance
+- Registers approved models
+- Deploys to appropriate environment
+
+### **3. Batch Inference Job** (`batch-inference-workflow-asset.yml`)
+- Processes large datasets for predictions
+- Writes results to Delta tables
+- Scheduled for regular batch processing
+
+## 📁 Project Structure
+
+```
+mlops_stacks_gcp_fs/
+├── feature_engineering/
+│   ├── feature_engineering_utils.py      # Consolidated timestamp utilities
+│   ├── features/
+│   │   ├── pickup_features.py           # Pickup location features
+│   │   └── dropoff_features.py          # Dropoff location features
+│   └── notebooks/
+│       └── GenerateAndWriteFeatures.py  # Feature store pipeline
+├── training/
+│   ├── training_utils.py                # Model utilities (type-safe)
+│   └── notebooks/
+│       └── TrainWithFeatureStore.py     # Training pipeline
+├── deployment/
+│   ├── model_deployment/                # Model deployment logic
+│   └── batch_inference/                 # Batch prediction pipeline
+├── assets/                             # Databricks Asset Bundle configs
+├── requirements.txt                    # Dependencies + linting tools
+├── pyproject.toml                     # Black configuration  
+├── .pylintrc                          # Pylint configuration
+└── mypy.ini                           # MyPy type checking
+```
+
 ## 🔧 Model Details
 
 ### **Algorithm**: LightGBM Gradient Boosting
@@ -575,102 +618,6 @@ enriched_results.select(
 +----------+-----------+----------+-------------+------------------+
 ```
 
-#### **⚡ Performance & Scalability**
-
-##### **Processing Capacity**:
-```python
-# Typical performance metrics on Databricks cluster
-data_sizes = {
-    "Small batch": "10K trips → ~2 minutes",
-    "Medium batch": "1M trips → ~15 minutes", 
-    "Large batch": "10M trips → ~2 hours",
-    "Enterprise batch": "100M+ trips → ~4-8 hours"
-}
-
-# Optimization strategies:
-# 1. Partition data by date/region for parallel processing
-batch_data.repartition(col("trip_date"), col("pickup_region"))
-
-# 2. Cache feature store tables for repeated lookups  
-spark.sql("CACHE TABLE p03.e2e_demo_simon.trip_pickup_features")
-spark.sql("CACHE TABLE p03.e2e_demo_simon.trip_dropoff_features") 
-
-# 3. Use appropriate cluster sizing
-cluster_config = {
-    "10K-100K trips": "2-4 workers (8 cores each)",
-    "100K-1M trips": "8-16 workers (8 cores each)",
-    "1M+ trips": "16+ workers (16+ cores each)"
-}
-```
-
-#### **🔄 Automated Batch Pipeline**
-
-##### **Databricks Workflow Configuration** (`batch-inference-workflow-asset.yml`):
-```yaml
-resources:
-  jobs:
-    batch_inference_job:
-      name: "Taxi Fare Batch Inference - ${bundle.environment}"
-      tasks:
-        - task_key: batch_prediction
-          notebook_task:
-            notebook_path: "./deployment/batch_inference/notebooks/BatchInference.py"
-          job_cluster_key: batch_cluster
-          parameters:
-            input_path: "/databricks-datasets/nyctaxi-with-zipcodes/subsampled"
-            output_table: "p03.e2e_demo_simon.taxi_fare_predictions_batch" 
-            model_name: "p03.e2e_demo_simon.taxi_fare_model"
-      schedule:
-        quartz_cron_expression: "0 0 2 * * ?" # Daily at 2 AM
-        timezone_id: "UTC"
-```
-
-##### **Monitoring & Alerting**:
-```python
-# Built-in monitoring for batch jobs
-batch_metrics = {
-    "rows_processed": batch_predictions.count(),
-    "avg_prediction": batch_predictions.select(avg("prediction")).collect()[0][0],
-    "processing_time_minutes": (end_time - start_time) / 60,
-    "feature_lookup_success_rate": successful_lookups / total_lookups
-}
-
-# Alert if batch job fails or metrics are unusual
-if batch_metrics["avg_prediction"] < 5 or batch_metrics["avg_prediction"] > 50:
-    send_alert("Batch predictions outside expected range")
-```
-
-#### **💡 Use Cases**
-
-1. **Historical Analysis**:
-   ```python
-   # Analyze fare trends over past 3 months
-   historical_data = spark.sql("""
-       SELECT * FROM delta.`/databricks-datasets/nyctaxi/` 
-       WHERE tpep_pickup_datetime >= '2025-06-13'
-   """)
-   ```
-
-2. **Route Optimization**:
-   ```python
-   # Pre-compute fares for all pickup/dropoff combinations
-   route_matrix = spark.sql("""
-       SELECT p.zip as pickup_zip, d.zip as dropoff_zip,
-              current_timestamp() as tpep_pickup_datetime,
-              current_timestamp() + interval 15 minutes as tpep_dropoff_datetime
-       FROM pickup_zones p CROSS JOIN dropoff_zones d
-   """)
-   ```
-
-3. **Model Backtesting**:
-   ```python
-   # Compare predictions vs actual fares for validation
-   validation_results = batch_predictions.select(
-       "fare_amount",  # Actual fare
-       "prediction",   # Model prediction
-       abs(col("fare_amount") - col("prediction")).alias("error")
-   )
-   ```
 
 ### **4. Real-time API Inference**
 
@@ -916,49 +863,6 @@ WHERE zip = '10019'
      "fallback": "Using latest available version"
    }
    ```
-
-## 🔄 MLOps Pipeline Workflows
-
-### **1. Feature Engineering Job** (`feature-engineering-workflow-asset.yml`)
-- Computes and updates feature store tables
-- Runs on schedule or triggered by new data
-- Maintains feature freshness and data quality
-
-### **2. Model Training Job** (`model-workflow-asset.yml`)  
-- Trains new model versions
-- Validates model performance
-- Registers approved models
-- Deploys to appropriate environment
-
-### **3. Batch Inference Job** (`batch-inference-workflow-asset.yml`)
-- Processes large datasets for predictions
-- Writes results to Delta tables
-- Scheduled for regular batch processing
-
-## 📁 Project Structure
-
-```
-mlops_stacks_gcp_fs/
-├── feature_engineering/
-│   ├── feature_engineering_utils.py      # Consolidated timestamp utilities
-│   ├── features/
-│   │   ├── pickup_features.py           # Pickup location features
-│   │   └── dropoff_features.py          # Dropoff location features
-│   └── notebooks/
-│       └── GenerateAndWriteFeatures.py  # Feature store pipeline
-├── training/
-│   ├── training_utils.py                # Model utilities (type-safe)
-│   └── notebooks/
-│       └── TrainWithFeatureStore.py     # Training pipeline
-├── deployment/
-│   ├── model_deployment/                # Model deployment logic
-│   └── batch_inference/                 # Batch prediction pipeline
-├── assets/                             # Databricks Asset Bundle configs
-├── requirements.txt                    # Dependencies + linting tools
-├── pyproject.toml                     # Black configuration  
-├── .pylintrc                          # Pylint configuration
-└── mypy.ini                           # MyPy type checking
-```
 
 ## 🛠️ Development Tools
 
