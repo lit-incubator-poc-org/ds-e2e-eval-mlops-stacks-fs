@@ -1,0 +1,15 @@
+[pylint]
+max-line-length = 120
+disable = 
+    C0114,  # missing-module-docstring
+    C0115,  # missing-class-docstring
+    C0116,  # missing-function-docstring (we'll handle this with good docstrings)
+    R0903,  # too-few-public-methods
+    W0613,  # unused-argument
+    C0103,  # invalid-name (for variables like df, which is common in data science)
+
+[pylint.messages_control]
+extension-pkg-allow-list = pyspark
+
+[pylint.typecheck]
+ignored-modules = pyspark, databricks, mlflow, dbutils

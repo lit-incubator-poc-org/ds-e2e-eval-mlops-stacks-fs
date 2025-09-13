@@ -110,22 +110,14 @@ raw_data.display()
 
 import pyspark.sql.functions as F
 import sys
-# Add the feature_engineering directory to the Python path (relative to notebook location)
+# Add directories to the Python path (relative to notebook location)
 sys.path.append("../../feature_engineering")
+sys.path.append("..")
 
-# Import consolidated feature engineering functions
+# Import consolidated feature engineering and training functions
 from feature_engineering_utils import add_rounded_timestamps
+from training_utils import get_latest_model_version
 import mlflow.pyfunc
-
-
-def get_latest_model_version(model_name):
-    latest_version = 1
-    mlflow_client = MlflowClient()
-    for mv in mlflow_client.search_model_versions(f"name='{model_name}'"):
-        version_int = int(mv.version)
-        if version_int > latest_version:
-            latest_version = version_int
-    return latest_version
 
 
 # COMMAND ----------
