@@ -479,13 +479,200 @@ model_input = {**prediction_request, **features_computed}
 **Result**: Without features, the model becomes a **simple distance calculator**, losing all contextual intelligence that makes it valuable for dynamic pricing.
 
 ### **3. Batch Inference**
+
+#### **📦 Overview**
+Batch inference processes large datasets (thousands to millions of trips) for scenarios like:
+- **Historical Analysis**: Analyzing fare patterns over past months
+- **Business Intelligence**: Daily/weekly fare reports
+- **Model Validation**: Backtesting model performance
+- **Bulk Pricing**: Pre-computing fares for route optimization
+
+#### **🔧 Implementation**
+
+##### **Step 1: Data Preparation**
 ```python
-# Preprocessing with feature store lookups
-preprocessed_data = add_rounded_timestamps(raw_data)
-predictions = fs_client.score_batch(model_uri, preprocessed_data)
+from databricks import feature_store
+from feature_engineering.feature_engineering_utils import add_rounded_timestamps
+import mlflow
+
+# Load raw trip data (Delta table or Parquet files)
+raw_data = spark.read.format("delta").load("/path/to/trip/data")
+
+# Sample raw data structure:
+# +-----------------+-------------------+-------------+-----------+------------+-------------+
+# |pickup_zip       |dropoff_zip        |trip_distance|fare_amount|pickup_time |dropoff_time |
+# +-----------------+-------------------+-------------+-----------+------------+-------------+
+# |10001            |10019              |2.5          |12.5       |2025-09-13..|2025-09-13..|
+# |10110            |10282              |4.8          |19.0       |2025-09-13..|2025-09-13..|
+# +-----------------+-------------------+-------------+-----------+------------+-------------+
+
+# Add rounded timestamps for feature store lookups
+preprocessed_data = add_rounded_timestamps(
+    raw_data,
+    pickup_minutes=15,   # Round to 15-minute intervals for pickup features
+    dropoff_minutes=30   # Round to 30-minute intervals for dropoff features
+)
 ```
 
-### **3. Real-time API Inference**
+##### **Step 2: Feature Store Batch Scoring**
+```python
+# Initialize Feature Store client
+fs_client = feature_store.FeatureStoreClient()
+
+# Model URI (from MLflow Model Registry)
+model_uri = "models:/p03.e2e_demo_simon.taxi_fare_model/9"
+
+# Batch scoring with automatic feature lookups
+batch_predictions = fs_client.score_batch(
+    model_uri=model_uri,
+    df=preprocessed_data,
+    result_type="float"  # Return predictions as float values
+)
+
+# Result DataFrame includes:
+# - Original columns (pickup_zip, dropoff_zip, timestamps)
+# - Feature Store lookups (mean_fare_1h, count_trips, etc.)  
+# - Model prediction column
+batch_predictions.display()
+```
+
+##### **Step 3: Results Processing & Storage**
+```python
+# Add metadata and business logic
+enriched_results = (
+    batch_predictions
+    .withColumn("prediction_date", current_date())
+    .withColumn("model_version", lit("9"))
+    .withColumn("batch_id", lit("batch_2025_09_13"))
+    .withColumn("fare_category", 
+        when(col("prediction") < 10, "Economy")
+        .when(col("prediction") < 20, "Standard") 
+        .otherwise("Premium")
+    )
+)
+
+# Save results to Delta table for business analytics
+enriched_results.write.format("delta").mode("overwrite").saveAsTable(
+    "p03.e2e_demo_simon.taxi_fare_predictions_batch"
+)
+
+# Show sample results
+enriched_results.select(
+    "pickup_zip", "dropoff_zip", "prediction", "fare_category", "batch_id"
+).show(10)
+```
+
+#### **📊 Sample Batch Output**
+```
++----------+-----------+----------+-------------+------------------+
+|pickup_zip|dropoff_zip|prediction|fare_category|batch_id          |
++----------+-----------+----------+-------------+------------------+
+|10001     |10019      |15.75     |Standard     |batch_2025_09_13  |
+|10110     |10282      |22.40     |Premium      |batch_2025_09_13  |
+|10103     |10023      |8.90      |Economy      |batch_2025_09_13  |
+|10017     |10065      |18.25     |Standard     |batch_2025_09_13  |
+|10009     |10153      |12.60     |Standard     |batch_2025_09_13  |
++----------+-----------+----------+-------------+------------------+
+```
+
+#### **⚡ Performance & Scalability**
+
+##### **Processing Capacity**:
+```python
+# Typical performance metrics on Databricks cluster
+data_sizes = {
+    "Small batch": "10K trips → ~2 minutes",
+    "Medium batch": "1M trips → ~15 minutes", 
+    "Large batch": "10M trips → ~2 hours",
+    "Enterprise batch": "100M+ trips → ~4-8 hours"
+}
+
+# Optimization strategies:
+# 1. Partition data by date/region for parallel processing
+batch_data.repartition(col("trip_date"), col("pickup_region"))
+
+# 2. Cache feature store tables for repeated lookups  
+spark.sql("CACHE TABLE p03.e2e_demo_simon.trip_pickup_features")
+spark.sql("CACHE TABLE p03.e2e_demo_simon.trip_dropoff_features") 
+
+# 3. Use appropriate cluster sizing
+cluster_config = {
+    "10K-100K trips": "2-4 workers (8 cores each)",
+    "100K-1M trips": "8-16 workers (8 cores each)",
+    "1M+ trips": "16+ workers (16+ cores each)"
+}
+```
+
+#### **🔄 Automated Batch Pipeline**
+
+##### **Databricks Workflow Configuration** (`batch-inference-workflow-asset.yml`):
+```yaml
+resources:
+  jobs:
+    batch_inference_job:
+      name: "Taxi Fare Batch Inference - ${bundle.environment}"
+      tasks:
+        - task_key: batch_prediction
+          notebook_task:
+            notebook_path: "./deployment/batch_inference/notebooks/BatchInference.py"
+          job_cluster_key: batch_cluster
+          parameters:
+            input_path: "/databricks-datasets/nyctaxi-with-zipcodes/subsampled"
+            output_table: "p03.e2e_demo_simon.taxi_fare_predictions_batch" 
+            model_name: "p03.e2e_demo_simon.taxi_fare_model"
+      schedule:
+        quartz_cron_expression: "0 0 2 * * ?" # Daily at 2 AM
+        timezone_id: "UTC"
+```
+
+##### **Monitoring & Alerting**:
+```python
+# Built-in monitoring for batch jobs
+batch_metrics = {
+    "rows_processed": batch_predictions.count(),
+    "avg_prediction": batch_predictions.select(avg("prediction")).collect()[0][0],
+    "processing_time_minutes": (end_time - start_time) / 60,
+    "feature_lookup_success_rate": successful_lookups / total_lookups
+}
+
+# Alert if batch job fails or metrics are unusual
+if batch_metrics["avg_prediction"] < 5 or batch_metrics["avg_prediction"] > 50:
+    send_alert("Batch predictions outside expected range")
+```
+
+#### **💡 Use Cases**
+
+1. **Historical Analysis**:
+   ```python
+   # Analyze fare trends over past 3 months
+   historical_data = spark.sql("""
+       SELECT * FROM delta.`/databricks-datasets/nyctaxi/` 
+       WHERE tpep_pickup_datetime >= '2025-06-13'
+   """)
+   ```
+
+2. **Route Optimization**:
+   ```python
+   # Pre-compute fares for all pickup/dropoff combinations
+   route_matrix = spark.sql("""
+       SELECT p.zip as pickup_zip, d.zip as dropoff_zip,
+              current_timestamp() as tpep_pickup_datetime,
+              current_timestamp() + interval 15 minutes as tpep_dropoff_datetime
+       FROM pickup_zones p CROSS JOIN dropoff_zones d
+   """)
+   ```
+
+3. **Model Backtesting**:
+   ```python
+   # Compare predictions vs actual fares for validation
+   validation_results = batch_predictions.select(
+       "fare_amount",  # Actual fare
+       "prediction",   # Model prediction
+       abs(col("fare_amount") - col("prediction")).alias("error")
+   )
+   ```
+
+### **4. Real-time API Inference**
 
 #### **🔄 Feature Store Integration During Inference**
 
