@@ -23,6 +23,7 @@ def add_rounded_timestamps(df: DataFrame, pickup_minutes: int = 15, dropoff_minu
     Returns:
         DataFrame with added rounded_pickup_datetime and
         rounded_dropoff_datetime columns
+        
     """
 
     def round_timestamp_to_interval(timestamp_col: Union[str, Column], minutes: int) -> Column:
