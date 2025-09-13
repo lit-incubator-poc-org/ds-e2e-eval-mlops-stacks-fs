@@ -60,6 +60,41 @@ This enables taxi companies and ride-sharing services to:
    - `count_trips_window_30m_dropoff_zip`: Trip volume in dropoff area (30-min window)
    - `dropoff_is_weekend`: Weekend indicator for dropoff time
 
+## 📊 Raw Data Overview
+
+### **NYC Taxi Raw Dataset (`/databricks-datasets/nyctaxi-with-zipcodes/subsampled`)**
+```sql
+-- Query: SELECT * FROM delta.`/databricks-datasets/nyctaxi-with-zipcodes/subsampled` LIMIT 10;
+```
+
+| tpep_pickup_datetime | tpep_dropoff_datetime | trip_distance | fare_amount | pickup_zip | dropoff_zip |
+|---------------------|----------------------|---------------|-------------|------------|-------------|
+| 2016-02-14 16:52:13 | 2016-02-14 17:16:04  | 4.94          | 19.0        | 10282      | 10171       |
+| 2016-02-04 18:44:19 | 2016-02-04 18:46:00  | 0.28          | 3.5         | 10110      | 10110       |
+| 2016-02-17 17:13:57 | 2016-02-17 17:17:55  | 0.7           | 5.0         | 10103      | 10023       |
+| 2016-02-18 10:36:07 | 2016-02-18 10:41:45  | 0.8           | 6.0         | 10022      | 10017       |
+| 2016-02-22 14:14:41 | 2016-02-22 14:31:52  | 4.51          | 17.0        | 10110      | 10282       |
+| 2016-02-05 06:45:02 | 2016-02-05 06:50:26  | 1.8           | 7.0         | 10009      | 10065       |
+| 2016-02-15 15:03:28 | 2016-02-15 15:18:45  | 2.58          | 12.0        | 10153      | 10199       |
+| 2016-02-25 19:09:26 | 2016-02-25 19:24:50  | 1.4           | 11.0        | 10112      | 10069       |
+| 2016-02-13 16:28:18 | 2016-02-13 16:36:36  | 1.21          | 7.5         | 10023      | 10153       |
+| 2016-02-14 00:03:48 | 2016-02-14 00:10:24  | 0.6           | 6.0         | 10012      | 10003       |
+
+**Raw Data Schema**:
+- `tpep_pickup_datetime`: Trip start timestamp (used for pickup feature lookups)
+- `tpep_dropoff_datetime`: Trip end timestamp (used for dropoff feature lookups)  
+- `trip_distance`: Distance traveled in miles (not used in current model)
+- `fare_amount`: **Target variable** for prediction
+- `pickup_zip`: **Primary key** for pickup feature table lookups
+- `dropoff_zip`: **Primary key** for dropoff feature table lookups
+
+**Key Observations**:
+- **Fare range**: $3.50 to $19.00 showing natural price variation
+- **Trip patterns**: Short trips (0.28 miles, 2 minutes) to longer trips (4.94 miles, 24 minutes)
+- **NYC coverage**: Various Manhattan zip codes (10009-10282) representing different neighborhoods
+- **Time diversity**: Morning (06:45), afternoon (16:52), and late night (00:03) trips
+- **February 2016**: All data from winter month, consistent with feature table samples
+
 ## 🏪 Feature Store Architecture
 
 ### **Why Feature Store is Needed**
@@ -98,41 +133,6 @@ features = df.groupBy("dropoff_zip", window("timestamp", "30 minutes")).agg(
 - **Timestamp Key**: `tpep_dropoff_datetime` (rounded to 30-minute intervals)
 - **Window**: 30-minute sliding window
 - **Purpose**: Capture destination demand and day-of-week patterns
-
-### **📊 Raw Data Sample**
-
-#### **NYC Taxi Raw Dataset (`/databricks-datasets/nyctaxi-with-zipcodes/subsampled`)**
-```sql
--- Query: SELECT * FROM delta.`/databricks-datasets/nyctaxi-with-zipcodes/subsampled` LIMIT 10;
-```
-
-| tpep_pickup_datetime | tpep_dropoff_datetime | trip_distance | fare_amount | pickup_zip | dropoff_zip |
-|---------------------|----------------------|---------------|-------------|------------|-------------|
-| 2016-02-14 16:52:13 | 2016-02-14 17:16:04  | 4.94          | 19.0        | 10282      | 10171       |
-| 2016-02-04 18:44:19 | 2016-02-04 18:46:00  | 0.28          | 3.5         | 10110      | 10110       |
-| 2016-02-17 17:13:57 | 2016-02-17 17:17:55  | 0.7           | 5.0         | 10103      | 10023       |
-| 2016-02-18 10:36:07 | 2016-02-18 10:41:45  | 0.8           | 6.0         | 10022      | 10017       |
-| 2016-02-22 14:14:41 | 2016-02-22 14:31:52  | 4.51          | 17.0        | 10110      | 10282       |
-| 2016-02-05 06:45:02 | 2016-02-05 06:50:26  | 1.8           | 7.0         | 10009      | 10065       |
-| 2016-02-15 15:03:28 | 2016-02-15 15:18:45  | 2.58          | 12.0        | 10153      | 10199       |
-| 2016-02-25 19:09:26 | 2016-02-25 19:24:50  | 1.4           | 11.0        | 10112      | 10069       |
-| 2016-02-13 16:28:18 | 2016-02-13 16:36:36  | 1.21          | 7.5         | 10023      | 10153       |
-| 2016-02-14 00:03:48 | 2016-02-14 00:10:24  | 0.6           | 6.0         | 10012      | 10003       |
-
-**Raw Data Schema**:
-- `tpep_pickup_datetime`: Trip start timestamp (used for pickup feature lookups)
-- `tpep_dropoff_datetime`: Trip end timestamp (used for dropoff feature lookups)  
-- `trip_distance`: Distance traveled in miles (not used in current model)
-- `fare_amount`: **Target variable** for prediction
-- `pickup_zip`: **Primary key** for pickup feature table lookups
-- `dropoff_zip`: **Primary key** for dropoff feature table lookups
-
-**Key Observations**:
-- **Fare range**: $3.50 to $19.00 showing natural price variation
-- **Trip patterns**: Short trips (0.28 miles, 2 minutes) to longer trips (4.94 miles, 24 minutes)
-- **NYC coverage**: Various Manhattan zip codes (10009-10282) representing different neighborhoods
-- **Time diversity**: Morning (06:45), afternoon (16:52), and late night (00:03) trips
-- **February 2016**: All data from winter month, consistent with feature table samples
 
 ### **📊 Sample Feature Table Data**
 
