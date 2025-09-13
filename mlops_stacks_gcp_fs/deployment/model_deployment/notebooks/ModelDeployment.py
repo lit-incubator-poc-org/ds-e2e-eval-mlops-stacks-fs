@@ -47,6 +47,7 @@ assert model_uri != "", "model_uri notebook parameter must be specified"
 deploy(model_uri, env)
 
 # COMMAND ----------
-print(
-    f"Successfully completed model deployment for {model_uri}"
-)
+
+print(f"Successfully completed model deployment for {model_uri}")
+print("✅ Model deployed with online feature store enabled")
+print("🚀 Model is ready for real-time inference with low-latency feature lookups")

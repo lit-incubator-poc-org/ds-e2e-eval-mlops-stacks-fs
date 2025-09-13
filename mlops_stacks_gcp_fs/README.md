@@ -18,6 +18,7 @@
 - [🚀 Training Pipeline](#-training-pipeline)
 - [📊 Deployment & Inference](#-deployment--inference)
   - [Model Deployment](#1-model-deployment)
+  - [Online Feature Store Setup](#-new-online-feature-store-setup)
   - [Feature Importance](#2-why-features-are-critical-during-inference)
   - [Batch Inference](#3-batch-inference)
   - [Real-time API Inference](#4-real-time-api-inference)
@@ -65,16 +66,37 @@ This enables taxi companies and ride-sharing services to:
 - Runs on schedule or triggered by new data
 - Maintains feature freshness and data quality
 
+**Run**
+```bash
+databricks bundle deploy
+
+databricks bundle run write_feature_table_job
+```
+
 ### **2. Model Training Job** (`model-workflow-asset.yml`)  
 - Trains new model versions
 - Validates model performance
 - Registers approved models
 - Deploys to appropriate environment
 
+**Run**
+```bash
+databricks bundle deploy
+
+databricks bundle run model_training_job
+```
+
 ### **3. Batch Inference Job** (`batch-inference-workflow-asset.yml`)
 - Processes large datasets for predictions
 - Writes results to Delta tables
 - Scheduled for regular batch processing
+
+**Run**
+```bash
+databricks bundle deploy
+
+databricks bundle run batch_inference_job
+```
 
 ## 📁 Project Structure
 
@@ -353,9 +375,375 @@ pickup_feature_lookups = [
 ## 📊 Deployment & Inference
 
 ### **1. Model Deployment**
+
+#### **🚀 Standard Deployment Process**
 - **Registry**: MLflow Model Registry with Unity Catalog integration
 - **Aliases**: Environment-based aliases (dev, staging, prod)
 - **Versioning**: Automatic model versioning and lineage tracking
+
+#### **🌟 NEW: Online Feature Store Setup**
+
+The deployment process now automatically enables **Online Feature Store** for real-time inference:
+
+**✅ Enhanced Deployment Features:**
+- **Automatic Online Store Enablement**: Publishes feature tables to online store during deployment
+- **Low-Latency Feature Lookup**: Enables real-time feature retrieval for model serving
+- **Error Prevention**: Prevents "Feature lookup setup failed" errors
+
+**🛠️ Manual Online Feature Store Setup:**
+
+If you need to enable online feature store independently:
+
+```bash
+# Option 1: Run standalone script (requires Databricks environment)
+cd mlops_stacks_gcp_fs/deployment/model_deployment/
+python enable_online_feature_store.py --catalog p03 --schema e2e_demo_simon
+
+# Option 2: Run in Databricks notebook  
+# Navigate to: deployment/model_deployment/notebooks/OnlineFeatureStore.py
+# Right-click -> Run on Databricks
+
+# Option 3: AZURE-SPECIFIC FIX - Run the Azure online store fix notebook
+# Navigate to: deployment/model_deployment/notebooks/AzureOnlineStoreFix.py
+# Right-click -> Run on Databricks
+
+# Option 4: Original fix (AWS-based, may not work on Azure)
+# Navigate to: deployment/model_deployment/notebooks/FixOnlineFeatureStore.py
+# Right-click -> Run on Databricks
+```
+
+**🚨 AZURE DATABRICKS: "Feature lookup setup failed" Error Fix:**
+
+If you're getting the deployment error on **Azure Databricks**, run this **immediately**:
+
+1. **Open Databricks Workspace**
+2. **Navigate to**: `deployment/model_deployment/notebooks/AzureOnlineStoreFix.py`
+3. **Right-click** → **Run on Databricks**
+4. **Configure Azure online store** (Cosmos DB or Azure SQL)
+5. **Wait for completion** - this will enable Azure online feature store
+6. **Try model serving again**
+
+**🔵 Azure Prerequisites:**
+- Azure Cosmos DB account (Core SQL API) OR Azure SQL Database
+- Databricks secrets configured for authentication
+- Proper networking/firewall configuration
+
+**🧪 Test Online Feature Store:**
+```bash
+# Test online feature lookup (requires Databricks environment)
+python enable_online_feature_store.py --test-only --catalog p03 --schema e2e_demo_simon
+```
+
+#### **🚨 Common Deployment Error: Feature Store Setup Failed**
+
+**Error Message:**
+```
+"Endpoint update failed
+Failed to deploy dev_mlops_stacks_gcp_fs_model-11: Feature lookup setup failed. 
+Please make sure your online feature store is set up correctly."
+```
+
+#### **🔧 Root Causes & Solutions**
+
+##### **1. Online Feature Store Configuration (Most Likely)**
+**Problem**: Databricks Online Feature Store is not properly configured for serving.
+
+**Check Online Feature Store Status:**
+```sql
+-- Verify tables exist (you confirmed this already)
+SHOW TABLES IN p03.e2e_demo_simon LIKE '*trip*features*';
+
+-- Check if tables are enabled for online serving
+DESCRIBE DETAIL p03.e2e_demo_simon.trip_pickup_features;
+DESCRIBE DETAIL p03.e2e_demo_simon.trip_dropoff_features;
+```
+
+**Solution**: Enable online serving for feature tables using **Azure-specific online stores**:
+```python
+# For Azure Databricks (Cosmos DB - Recommended)
+from databricks.feature_store import FeatureStoreClient
+from databricks.feature_store.online_store_spec import AzureCosmosDBSpec
+
+fs = FeatureStoreClient()
+
+# Configure Azure Cosmos DB online store
+cosmos_spec = AzureCosmosDBSpec(
+    account_uri='https://<your-cosmos-account>.documents.azure.com:443/',
+    read_secret_prefix='feature-store-secrets/cosmos-db',
+    write_secret_prefix='feature-store-secrets/cosmos-db'
+)
+
+# Enable online store for pickup features
+fs.publish_table(
+    name="p03.e2e_demo_simon.trip_pickup_features",
+    online_store=cosmos_spec,
+    mode='merge'
+)
+
+# Enable online store for dropoff features  
+fs.publish_table(
+    name="p03.e2e_demo_simon.trip_dropoff_features",
+    online_store=cosmos_spec,
+    mode='merge'
+)
+```
+
+**Alternative: Azure SQL Database**
+```python
+from databricks.feature_store.online_store_spec import AzureMySqlSpec
+
+# Configure Azure SQL Database online store  
+sql_spec = AzureMySqlSpec(
+    hostname='<your-server>.database.windows.net',
+    port='1433',
+    read_secret_prefix='feature-store-secrets/azure-sql',
+    write_secret_prefix='feature-store-secrets/azure-sql'
+)
+
+# Use sql_spec instead of cosmos_spec in publish_table calls
+```
+
+##### **2. Service Principal Permissions**
+**Problem**: The model serving compute doesn't have permissions to access feature tables.
+
+**Check Current Permissions:**
+```sql
+-- Check table permissions  
+SHOW GRANTS ON TABLE p03.e2e_demo_simon.trip_pickup_features;
+SHOW GRANTS ON TABLE p03.e2e_demo_simon.trip_dropoff_features;
+
+-- Check schema permissions
+SHOW GRANTS ON SCHEMA p03.e2e_demo_simon;
+```
+
+**Solution**: Grant permissions to the serving compute principal:
+```sql
+-- Grant to your user (for testing)
+GRANT SELECT ON TABLE p03.e2e_demo_simon.trip_pickup_features TO `<your-user>@<your-org>.com`;
+GRANT SELECT ON TABLE p03.e2e_demo_simon.trip_dropoff_features TO `<your-user>@<your-org>.com`;
+
+-- Grant to service principal (for production)
+GRANT SELECT ON TABLE p03.e2e_demo_simon.trip_pickup_features TO `<service-principal-id>`;
+GRANT SELECT ON TABLE p03.e2e_demo_simon.trip_dropoff_features TO `<service-principal-id>`;
+
+-- Grant schema usage
+GRANT USAGE ON SCHEMA p03.e2e_demo_simon TO `<your-user>@<your-org>.com`;
+```
+
+##### **3. Feature Store Metadata Issues**
+**Problem**: Feature Store metadata is inconsistent or corrupted.
+
+**Verify Feature Store Registration:**
+```python
+from databricks.feature_store import FeatureStoreClient
+fs = FeatureStoreClient()
+
+# Check feature table registration
+try:
+    pickup_table = fs.get_table("p03.e2e_demo_simon.trip_pickup_features")
+    print("Pickup table found:", pickup_table.name)
+    print("Primary keys:", pickup_table.primary_keys)
+    print("Timestamp keys:", pickup_table.timestamp_keys)
+except Exception as e:
+    print("Pickup table error:", str(e))
+
+try:
+    dropoff_table = fs.get_table("p03.e2e_demo_simon.trip_dropoff_features")  
+    print("Dropoff table found:", dropoff_table.name)
+    print("Primary keys:", dropoff_table.primary_keys) 
+    print("Timestamp keys:", dropoff_table.timestamp_keys)
+except Exception as e:
+    print("Dropoff table error:", str(e))
+```
+
+**Solution**: Re-register tables with Feature Store if needed:
+```python
+# If tables exist but aren't registered, re-create feature store registration
+fs.create_table(
+    name="p03.e2e_demo_simon.trip_pickup_features",
+    primary_keys=["zip"],
+    timestamp_keys=["tpep_pickup_datetime"], 
+    schema=spark.table("p03.e2e_demo_simon.trip_pickup_features").schema,
+    description="Pickup location features for taxi fare prediction"
+)
+```
+
+##### **4. Model Registry Metadata Issues**
+**Problem**: Model was trained with different feature store configuration.
+
+**Check Model Metadata:**
+```python
+import mlflow
+from mlflow.tracking import MlflowClient
+
+client = MlflowClient()
+model_version = client.get_model_version(
+    "p03.e2e_demo_simon.taxi_fare_model", 
+    "11"  # Your failing version
+)
+
+# Check feature store dependencies
+print(model_version.description)
+```
+
+**Solution**: Retrain model with correct feature store setup:
+```bash
+databricks bundle run model_training_job
+```
+
+#### **🔍 Diagnostic Script (Run This First)**
+
+Since your tables exist, run this diagnostic to identify the specific issue:
+
+```python
+# === Feature Store Deployment Diagnostic ===
+from databricks.feature_store import FeatureStoreClient
+import traceback
+
+fs = FeatureStoreClient()
+
+print("=== FEATURE STORE DIAGNOSTIC ===\n")
+
+# 1. Check table registration
+tables_to_check = [
+    "p03.e2e_demo_simon.trip_pickup_features",
+    "p03.e2e_demo_simon.trip_dropoff_features"
+]
+
+for table_name in tables_to_check:
+    print(f"--- Checking {table_name} ---")
+    try:
+        # Check if table exists in catalog
+        table_exists = spark.catalog.tableExists(table_name)
+        print(f"✓ Table exists in catalog: {table_exists}")
+        
+        if table_exists:
+            # Check row count
+            count = spark.table(table_name).count()
+            print(f"✓ Row count: {count}")
+            
+            # Check Feature Store registration
+            fs_table = fs.get_table(table_name)
+            print(f"✓ Registered in Feature Store: Yes")
+            print(f"  - Primary keys: {fs_table.primary_keys}")
+            print(f"  - Timestamp keys: {fs_table.timestamp_keys}")
+            
+            # Check online store status
+            table_info = spark.sql(f"DESCRIBE DETAIL {table_name}").collect()[0]
+            print(f"  - Table format: {table_info['format']}")
+            
+    except Exception as e:
+        print(f"✗ Error: {str(e)}")
+        if "not found" in str(e).lower():
+            print(f"  → Table {table_name} not registered in Feature Store")
+        elif "permission" in str(e).lower():
+            print(f"  → Permission denied accessing {table_name}")
+    print()
+
+# 2. Check model registration
+print("--- Checking Model Registration ---")
+try:
+    from mlflow.tracking import MlflowClient
+    client = MlflowClient()
+    
+    model_name = "p03.e2e_demo_simon.dev_mlops_stacks_gcp_fs_model"
+    latest_version = client.get_latest_versions(model_name, stages=["None"])
+    if latest_version:
+        version_info = latest_version[0]
+        print(f"✓ Latest model version: {version_info.version}")
+        print(f"  - Status: {version_info.status}")
+        
+        # Check if model has feature store dependencies
+        model_version = client.get_model_version(model_name, version_info.version)
+        tags = model_version.tags
+        if 'databricks.feature_store.package_version' in tags:
+            print(f"✓ Model has Feature Store integration")
+        else:
+            print(f"✗ Model missing Feature Store integration")
+    else:
+        print(f"✗ No model versions found for {model_name}")
+        
+except Exception as e:
+    print(f"✗ Model check error: {str(e)}")
+
+print("\n=== DIAGNOSTIC COMPLETE ===")
+print("Please share the output above for further troubleshooting.")
+```
+
+#### **✅ Deployment Verification Steps**
+
+1. **After running diagnostic, try these solutions:**
+```python
+# 1. Verify feature tables exist and have data
+spark.sql("SELECT COUNT(*) FROM p03.e2e_demo_simon.trip_pickup_features").show()
+spark.sql("SELECT COUNT(*) FROM p03.e2e_demo_simon.trip_dropoff_features").show()
+
+# 2. Test feature lookups manually
+from databricks.feature_store import FeatureStoreClient
+fs = FeatureStoreClient()
+
+# Test lookup
+test_df = spark.createDataFrame([
+    ("10001", "2025-09-13T14:30:00"),
+    ("10019", "2025-09-13T14:45:00")
+], ["zip", "timestamp"])
+
+features = fs.read_table("p03.e2e_demo_simon.trip_pickup_features")
+print(f"Pickup features count: {features.count()}")
+```
+
+2. **Model Deployment Command:**
+```bash
+# Deploy with explicit environment
+databricks bundle run model_deployment_job --var="env=dev"
+```
+
+3. **Test Deployed Endpoint:**
+```python
+# Test model serving endpoint
+import requests
+import json
+
+# Replace with your actual endpoint URL
+endpoint_url = "https://<databricks-instance>/serving-endpoints/dev-taxi-fare-model/invocations"
+token = "<your-token>"
+
+headers = {
+    "Authorization": f"Bearer {token}",
+    "Content-Type": "application/json"
+}
+
+payload = {
+    "dataframe_records": [{
+        "pickup_zip": "10001",
+        "dropoff_zip": "10019",
+        "tpep_pickup_datetime": "2025-09-13T14:30:00",
+        "tpep_dropoff_datetime": "2025-09-13T14:45:00"
+    }]
+}
+
+response = requests.post(endpoint_url, headers=headers, data=json.dumps(payload))
+print(f"Status: {response.status_code}")
+print(f"Response: {response.json()}")
+```
+
+#### **🛠️ Troubleshooting Commands**
+
+```bash
+# 1. Check bundle configuration
+databricks bundle validate
+
+# 2. Redeploy infrastructure
+databricks bundle deploy --force-lock
+
+# 3. Run full pipeline in order
+databricks bundle run feature_engineering_job    # First: Create feature tables
+databricks bundle run model_training_job         # Second: Train model with features  
+databricks bundle run model_deployment_job       # Third: Deploy model
+
+# 4. Check job logs
+databricks jobs list-runs --job-id <job-id> --limit 5
+```
 
 ### **2. Why Features Are Critical During Inference**
 
