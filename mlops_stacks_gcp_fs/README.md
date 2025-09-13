@@ -112,12 +112,12 @@ The **Databricks Feature Store** solves several critical challenges:
 #### **1. Pickup Features (`p03.e2e_demo_simon.trip_pickup_features`)** ([See sample data](#pickup-features-table-sample))
 ```python
 # Time-windowed aggregations for pickup locations
-features = df.groupBy("pickup_zip", window("timestamp", "1 hour", "15 minutes")).agg(
+features = df.groupBy("zip", window("tpep_pickup_datetime", "1 hour", "15 minutes")).agg(
     mean("fare_amount").alias("mean_fare_window_1h_pickup_zip"),
     count("*").alias("count_trips_window_1h_pickup_zip")
 )
 ```
-- **Primary Key**: `pickup_zip`
+- **Primary Key**: `zip`
 - **Timestamp Key**: `tpep_pickup_datetime` (rounded to 15-minute intervals)
 - **Window**: 1-hour sliding window, updated every 15 minutes
 - **Purpose**: Capture demand patterns and fare trends by pickup location
@@ -125,11 +125,11 @@ features = df.groupBy("pickup_zip", window("timestamp", "1 hour", "15 minutes"))
 #### **2. Dropoff Features (`p03.e2e_demo_simon.trip_dropoff_features`)** ([See sample data](#dropoff-features-table-sample))
 ```python
 # Trip volume and temporal features for dropoff locations  
-features = df.groupBy("dropoff_zip", window("timestamp", "30 minutes")).agg(
+features = df.groupBy("zip", window("tpep_dropoff_datetime", "30 minutes")).agg(
     count("*").alias("count_trips_window_30m_dropoff_zip")
-).withColumn("dropoff_is_weekend", is_weekend_udf("dropoff_datetime"))
+).withColumn("dropoff_is_weekend", is_weekend_udf("tpep_dropoff_datetime"))
 ```
-- **Primary Key**: `dropoff_zip`  
+- **Primary Key**: `zip`  
 - **Timestamp Key**: `tpep_dropoff_datetime` (rounded to 30-minute intervals)
 - **Window**: 30-minute sliding window
 - **Purpose**: Capture destination demand and day-of-week patterns
@@ -190,12 +190,13 @@ features = df.groupBy("dropoff_zip", window("timestamp", "30 minutes")).agg(
 ##### **Pickup Features Schema**
 ```sql
 CREATE TABLE p03.e2e_demo_simon.trip_pickup_features (
-  pickup_zip STRING NOT NULL,                          -- Primary key
-  timestamp TIMESTAMP NOT NULL,                        -- Timestamp key (rounded to 15min)
+  zip STRING NOT NULL,                                 -- Primary key
+  tpep_pickup_datetime TIMESTAMP NOT NULL,             -- Timestamp key (rounded to 15min)
+  yyyy_mm STRING,                                      -- Year-month partition
   mean_fare_window_1h_pickup_zip DOUBLE,              -- Average fare in 1-hour window
   count_trips_window_1h_pickup_zip BIGINT,            -- Trip count in 1-hour window
   
-  PRIMARY KEY (pickup_zip, timestamp)
+  PRIMARY KEY (zip, tpep_pickup_datetime)
 ) USING DELTA
 TBLPROPERTIES (
   'delta.feature.allowColumnDefaults' = 'supported',
@@ -206,12 +207,13 @@ TBLPROPERTIES (
 ##### **Dropoff Features Schema**
 ```sql
 CREATE TABLE p03.e2e_demo_simon.trip_dropoff_features (
-  dropoff_zip STRING NOT NULL,                         -- Primary key
-  timestamp TIMESTAMP NOT NULL,                        -- Timestamp key (rounded to 30min)
+  zip STRING NOT NULL,                                 -- Primary key
+  tpep_dropoff_datetime TIMESTAMP NOT NULL,            -- Timestamp key (rounded to 30min)
+  yyyy_mm STRING,                                      -- Year-month partition
   count_trips_window_30m_dropoff_zip BIGINT,          -- Trip count in 30-minute window
   dropoff_is_weekend INT,                              -- Weekend flag (0=weekday, 1=weekend)
   
-  PRIMARY KEY (dropoff_zip, timestamp)
+  PRIMARY KEY (zip, tpep_dropoff_datetime)
 ) USING DELTA
 TBLPROPERTIES (
   'delta.feature.allowColumnDefaults' = 'supported',
@@ -295,7 +297,7 @@ The model **cannot make accurate predictions** without the same engineered featu
 ##### **Feature 1: `mean_fare_window_1h_pickup_zip`**
 ```python
 # Calculation: Average fare amount for trips starting in the same pickup zone within 1-hour window
-SELECT pickup_zip, 
+SELECT pickup_zip as zip, 
        window(tpep_pickup_datetime, "1 hour", "15 minutes") as time_window,
        AVG(fare_amount) as mean_fare_window_1h_pickup_zip
 FROM taxi_trips 
@@ -303,9 +305,9 @@ GROUP BY pickup_zip, time_window
 ```
 
 **Input Data Required**:
-- `pickup_zip`: "10001", "10019", "11249" (pickup location zip codes)
-- `tpep_pickup_datetime`: "2025-09-13 14:30:00" (trip start timestamp)
-- `fare_amount`: 12.50, 18.75, 25.00 (historical fare amounts)
+- `pickup_zip`: "10282", "10110", "10103" (pickup location zip codes from raw data)
+- `tpep_pickup_datetime`: "2016-02-14 16:52:13" (trip start timestamp)
+- `fare_amount`: 3.5, 19.0, 17.0 (historical fare amounts from raw data)
 
 **Sample Feature Values**:
 ```json
@@ -324,7 +326,7 @@ GROUP BY pickup_zip, time_window
 ##### **Feature 2: `count_trips_window_1h_pickup_zip`**
 ```python
 # Calculation: Number of trips started from the same pickup zone within 1-hour window
-SELECT pickup_zip,
+SELECT pickup_zip as zip,
        window(tpep_pickup_datetime, "1 hour", "15 minutes") as time_window,
        COUNT(*) as count_trips_window_1h_pickup_zip
 FROM taxi_trips
@@ -332,9 +334,9 @@ GROUP BY pickup_zip, time_window
 ```
 
 **Input Data Required**:
-- `pickup_zip`: Location identifiers for trip origins
-- `tpep_pickup_datetime`: Trip start timestamps
-- Trip records (each row = one trip)
+- `pickup_zip`: Location identifiers for trip origins (from raw data)
+- `tpep_pickup_datetime`: Trip start timestamps (from raw data)
+- Trip records (each row = one trip from raw dataset)
 
 **Sample Feature Values**:
 ```json
@@ -361,7 +363,7 @@ GROUP BY pickup_zip, time_window
 ##### **Feature 3: `count_trips_window_30m_dropoff_zip`**
 ```python
 # Calculation: Number of trips ending in the same dropoff zone within 30-minute window
-SELECT dropoff_zip,
+SELECT dropoff_zip as zip,
        window(tpep_dropoff_datetime, "30 minutes") as time_window,
        COUNT(*) as count_trips_window_30m_dropoff_zip  
 FROM taxi_trips
@@ -369,8 +371,8 @@ GROUP BY dropoff_zip, time_window
 ```
 
 **Input Data Required**:
-- `dropoff_zip`: "10001", "10019", "11249" (destination zip codes)
-- `tpep_dropoff_datetime`: "2025-09-13 14:45:00" (trip end timestamp)
+- `dropoff_zip`: "10171", "10110", "10023" (destination zip codes from raw data)
+- `tpep_dropoff_datetime`: "2016-02-14 17:16:04" (trip end timestamp from raw data)
 - Trip records for counting destination activity
 
 **Sample Feature Values**:
@@ -391,7 +393,7 @@ GROUP BY dropoff_zip, time_window
 ##### **Feature 4: `dropoff_is_weekend`** 
 ```python
 # Calculation: Boolean flag indicating if dropoff occurs on weekend
-SELECT dropoff_zip,
+SELECT dropoff_zip as zip,
        tpep_dropoff_datetime,
        CASE WHEN dayofweek(tpep_dropoff_datetime) IN (1, 7) THEN 1 ELSE 0 END as dropoff_is_weekend
 FROM taxi_trips
