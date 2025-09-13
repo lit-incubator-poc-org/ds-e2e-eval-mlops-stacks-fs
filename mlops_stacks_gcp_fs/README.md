@@ -487,21 +487,44 @@ predictions = fs_client.score_batch(model_uri, preprocessed_data)
 
 ### **3. Real-time API Inference**
 
-Once deployed behind a REST API endpoint, the model can be called with:
+#### **🔄 Feature Store Integration During Inference**
 
-#### **Sample JSON Request**:
+The model is packaged with **Feature Store integration**, which creates a two-step process:
+
+```
+Raw API Input → Feature Store Lookups → Model Prediction
+     ↓                    ↓                   ↓
+pickup_zip: "10001"  →  mean_fare_1h: 18.75  →  $15.75
+dropoff_zip: "10019" →  count_trips: 42      →
+timestamps           →  is_weekend: 0        →
+```
+
+#### **📥 API Input Schema** (What you send):
 ```json
 {
   "dataframe_records": [
     {
-      "pickup_zip": "10001",
-      "dropoff_zip": "10019", 
-      "tpep_pickup_datetime": "2025-09-13T14:30:00",
-      "tpep_dropoff_datetime": "2025-09-13T14:45:00"
+      "pickup_zip": "10001",           // String: Pickup location identifier  
+      "dropoff_zip": "10019",          // String: Dropoff location identifier
+      "tpep_pickup_datetime": "2025-09-13T14:30:00",    // ISO timestamp
+      "tpep_dropoff_datetime": "2025-09-13T14:45:00"    // ISO timestamp
     }
   ]
 }
 ```
+
+#### **🧮 Model Signature Schema** (What the model receives after feature store):
+| Name | Type | Source |
+|------|------|--------|
+| `trip_distance` | double | Raw input (added by feature store) |
+| `pickup_zip` | integer | Raw input (converted to int) |
+| `dropoff_zip` | integer | Raw input (converted to int) |
+| `mean_fare_window_1h_pickup_zip` | float | **Feature Store Lookup** |
+| `count_trips_window_1h_pickup_zip` | integer | **Feature Store Lookup** |
+| `count_trips_window_30m_dropoff_zip` | integer | **Feature Store Lookup** |  
+| `dropoff_is_weekend` | integer | **Feature Store Lookup** |
+
+**🔑 Key Point**: You only send **4 fields** in the API call, but the model receives **7 fields** after Feature Store automatically adds the engineered features.
 
 #### **Expected Response**:
 ```json
@@ -533,6 +556,179 @@ curl -X POST "https://<databricks-instance>/serving-endpoints/taxi-fare-model/in
     ]
   }'
 ```
+
+#### **🚨 Important Notes**:
+1. **`trip_distance`**: Not required in API input - Feature Store adds default value
+2. **Timestamp Format**: Must be ISO 8601 format (`YYYY-MM-DDTHH:MM:SS`)
+3. **Zip Codes**: Send as strings, automatically converted to integers
+4. **Feature Lookups**: Happen automatically - no need to pre-compute features
+
+## 🔄 What Happens During Inference
+
+### **Step-by-Step Inference Flow**
+
+When a prediction request is made, here's exactly what happens behind the scenes:
+
+#### **Step 1: API Request Received** 
+```json
+POST /serving-endpoints/taxi-fare-model/invocations
+{
+  "dataframe_records": [{
+    "pickup_zip": "10001",
+    "dropoff_zip": "10019", 
+    "tpep_pickup_datetime": "2025-09-13T14:30:00",
+    "tpep_dropoff_datetime": "2025-09-13T14:45:00"
+  }]
+}
+```
+
+#### **Step 2: Input Validation & Preprocessing**
+```python
+# Databricks automatically handles:
+validated_input = {
+    "pickup_zip": 10001,                           # String → Integer conversion
+    "dropoff_zip": 10019,                          # String → Integer conversion  
+    "tpep_pickup_datetime": "2025-09-13T14:30:00", # ISO timestamp validation
+    "tpep_dropoff_datetime": "2025-09-13T14:45:00" # ISO timestamp validation
+}
+
+# Add missing required fields with defaults
+enhanced_input = {
+    **validated_input,
+    "trip_distance": 0.0,                          # Default value (not used in model)
+    "rounded_pickup_datetime": "2025-09-13T14:30:00",   # For feature lookup
+    "rounded_dropoff_datetime": "2025-09-13T14:45:00"   # For feature lookup  
+}
+```
+
+#### **Step 3: Feature Store Lookups**
+```python
+# Pickup Features Lookup (1-hour window from 13:30-14:30)
+pickup_features = feature_store.lookup(
+    table="p03.e2e_demo_simon.trip_pickup_features",
+    keys={"zip": 10001},
+    timestamp="2025-09-13T14:30:00"
+)
+# Returns:
+# mean_fare_window_1h_pickup_zip: 18.75
+# count_trips_window_1h_pickup_zip: 42
+
+# Dropoff Features Lookup (30-min window from 14:15-14:45)  
+dropoff_features = feature_store.lookup(
+    table="p03.e2e_demo_simon.trip_dropoff_features", 
+    keys={"zip": 10019},
+    timestamp="2025-09-13T14:45:00"
+)
+# Returns:
+# count_trips_window_30m_dropoff_zip: 15
+# dropoff_is_weekend: 0  (Friday = weekday)
+```
+
+#### **Step 4: Feature Vector Assembly**
+```python
+# Combine raw input + feature store lookups
+model_input_vector = {
+    # From API request (preprocessed)
+    "pickup_zip": 10001,
+    "dropoff_zip": 10019,
+    "trip_distance": 0.0,
+    
+    # From pickup feature store lookup
+    "mean_fare_window_1h_pickup_zip": 18.75,     # Avg fare in pickup area (last hour)
+    "count_trips_window_1h_pickup_zip": 42,      # Trip volume in pickup area (last hour)
+    
+    # From dropoff feature store lookup
+    "count_trips_window_30m_dropoff_zip": 15,    # Trip volume in dropoff area (last 30min)
+    "dropoff_is_weekend": 0                      # Weekend flag (0 = weekday)
+}
+```
+
+#### **Step 5: Model Prediction**
+```python
+# LightGBM model processes the complete feature vector
+prediction = lightgbm_model.predict([
+    [10001, 10019, 0.0, 18.75, 42, 15, 0]  # Feature vector as array
+])
+# prediction = 15.75
+```
+
+#### **Step 6: Response Assembly**
+```json
+{
+  "predictions": [
+    {
+      "prediction": 15.75,
+      "model_version": "9", 
+      "pickup_zip": "10001",
+      "dropoff_zip": "10019"
+    }
+  ]
+}
+```
+
+### **🕐 Real-Time Feature Computation Example**
+
+**Scenario**: Prediction request at `2025-09-13T14:30:00`
+
+#### **Pickup Features (zip: 10001)**
+```sql
+-- Query executed by Feature Store automatically:
+SELECT 
+    mean_fare_window_1h_pickup_zip,
+    count_trips_window_1h_pickup_zip
+FROM p03.e2e_demo_simon.trip_pickup_features  
+WHERE zip = '10001'
+  AND tpep_pickup_datetime = '2025-09-13T14:30:00'  -- Rounded timestamp
+```
+
+**Result**: `mean_fare: $18.75, trip_count: 42` (from 13:30-14:30 window)
+
+#### **Dropoff Features (zip: 10019)**
+```sql
+-- Query executed by Feature Store automatically:
+SELECT 
+    count_trips_window_30m_dropoff_zip,
+    dropoff_is_weekend
+FROM p03.e2e_demo_simon.trip_dropoff_features
+WHERE zip = '10019' 
+  AND tpep_dropoff_datetime = '2025-09-13T14:45:00'  -- Rounded timestamp
+```
+
+**Result**: `trip_count: 15, is_weekend: 0` (from 14:15-14:45 window)
+
+### **⚡ Performance Characteristics**
+
+- **Latency**: ~50-150ms per prediction
+- **Feature Store**: ~20-30ms for lookups
+- **Model Inference**: ~10-20ms for LightGBM
+- **Network/Serialization**: ~20-100ms
+
+### **🚨 Error Handling**
+
+**Common Issues & Responses**:
+
+1. **Missing Features**:
+   ```json
+   {
+     "error": "Feature not found for zip=99999 at timestamp=2025-09-13T14:30:00",
+     "fallback": "Uses historical average for missing features"
+   }
+   ```
+
+2. **Invalid Timestamps**:
+   ```json
+   {
+     "error": "Invalid timestamp format. Expected ISO 8601: YYYY-MM-DDTHH:MM:SS"
+   }
+   ```
+
+3. **Model Version Issues**:
+   ```json
+   {
+     "error": "Model version 9 not found",
+     "fallback": "Using latest available version"
+   }
+   ```
 
 ## 🔄 MLOps Pipeline Workflows
 
