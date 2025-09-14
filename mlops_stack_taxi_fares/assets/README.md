@@ -139,7 +139,7 @@ new_cluster: &new_cluster
 resources:
   jobs:
     batch_inference_job:
-      name: ${bundle.target}-mlops_stacks_gcp_fs-batch-inference-job
+      name: ${bundle.target}-mlops_stack_taxi_fares-batch-inference-job
       tasks:
         - task_key: batch_inference_job
           <<: *new_cluster
@@ -194,7 +194,7 @@ new_cluster: &new_cluster
 resources:
   jobs:
     batch_inference_job:
-      name: ${bundle.target}-mlops_stacks_gcp_fs-batch-inference-job
+      name: ${bundle.target}-mlops_stack_taxi_fares-batch-inference-job
       tasks:
         - task_key: batch_inference_job
           <<: *new_cluster

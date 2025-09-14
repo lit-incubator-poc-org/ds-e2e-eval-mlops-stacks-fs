@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 from pyspark.sql import SparkSession
 
-from mlops_stacks_gcp_fs.feature_engineering.features.dropoff_features import (
+from mlops_stack_taxi_fares.feature_engineering.features.dropoff_features import (
     compute_features_fn,
 )
 

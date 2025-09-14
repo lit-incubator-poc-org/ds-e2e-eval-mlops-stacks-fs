@@ -103,7 +103,7 @@ databricks bundle run batch_inference_job
 ## 📁 Project Structure
 
 ```
-mlops_stacks_gcp_fs/
+mlops_stack_taxi_fares/
 ├── scripts/                            # 🤖 Automation Scripts
 │   └── run_e2e_mlops_pipeline.sh       # Complete end-to-end automation
 ├── feature_engineering/                # Feature Store & Engineering

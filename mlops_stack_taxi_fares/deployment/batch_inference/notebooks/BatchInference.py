@@ -4,7 +4,7 @@
 #
 # This notebook is an example of applying a model for batch inference against an input delta table,
 # It is configured and can be executed as the batch_inference_job in the batch_inference_job workflow defined under
-# ``mlops_stacks_gcp_fs/assets/batch-inference-workflow-asset.yml``
+# ``mlops_stack_taxi_fares/assets/batch-inference-workflow-asset.yml``
 #
 # Parameters:
 #
@@ -28,7 +28,7 @@ dbutils.widgets.text("input_table_name", "", label="Input Table Name")
 dbutils.widgets.text("output_table_name", "", label="Output Table Name")
 # Batch inference model name
 dbutils.widgets.text(
-    "model_name", "dev-mlops_stacks_gcp_fs-model", label="Model Name"
+    "model_name", "dev-mlops_stack_taxi_fares-model", label="Model Name"
 )
 
 

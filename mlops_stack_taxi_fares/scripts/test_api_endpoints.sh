@@ -28,7 +28,7 @@ fi
 
 # Serving endpoint configuration
 ENDPOINT_NAME="nytaxifares"
-ENDPOINT_URL="https://adb-8490988242777396.16.azuredatabricks.net/serving-endpoints/mlops-taxi-fare-endpoint/invocations"
+ENDPOINT_URL="https://adb-8490988242777396.16.azuredatabricks.net/serving-endpoints/nytaxifares/invocations"
 
 echo "Checking serving endpoint..."
 echo "  Endpoint: $ENDPOINT_NAME"

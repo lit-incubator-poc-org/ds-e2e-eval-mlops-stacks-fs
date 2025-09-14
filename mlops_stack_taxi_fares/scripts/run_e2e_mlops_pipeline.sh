@@ -25,7 +25,7 @@
 
 # Script configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_NAME="mlops_stacks_gcp_fs"
+PROJECT_NAME="mlops_stack_taxi_fares"
 CATALOG="p03"
 SCHEMA="e2e_demo_simon"
 MODEL_NAME="${CATALOG}.${SCHEMA}.dev_${PROJECT_NAME}_model"
@@ -110,7 +110,7 @@ check_prerequisites() {
             log "Changing to parent directory..."
             cd ..
         else
-            error "databricks.yml not found. Please run from the mlops_stacks_gcp_fs directory or scripts subdirectory"
+            error "databricks.yml not found. Please run from the mlops_stack_taxi_fares directory or scripts subdirectory"
         fi
     fi
     

@@ -4,7 +4,7 @@
 #
 # This notebook shows an example of a Model Training pipeline using Databricks Feature Store tables.
 # It is configured and can be executed as the "Train" task in the model_training_job workflow defined under
-# ``mlops_stacks_gcp_fs/assets/model-workflow-asset.yml``
+# ``mlops_stack_taxi_fares/assets/model-workflow-asset.yml``
 #
 # Parameters:
 # * env (required):                 - Environment the notebook is run in (staging, or prod). Defaults to "staging".

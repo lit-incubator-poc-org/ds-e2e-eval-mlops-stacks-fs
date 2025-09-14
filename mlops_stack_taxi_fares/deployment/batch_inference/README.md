@@ -1,5 +1,5 @@
 # Batch Inference
-To set up batch inference job via scheduled Databricks workflow, please refer to [mlops_stacks_gcp_fs/assets/README.md](../../assets/README.md)
+To set up batch inference job via scheduled Databricks workflow, please refer to [mlops_stack_taxi_fares/assets/README.md](../../assets/README.md)
 
 ## Prepare the batch inference input table for the example Project
 Please run the following code in a notebook to generate the example batch inference input table.
