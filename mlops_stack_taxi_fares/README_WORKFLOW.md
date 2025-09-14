@@ -64,7 +64,7 @@ This MLOps pipeline implements a complete machine learning workflow using Azure 
 ```
 
 **Key Features**:
-- ✅ Uses existing configuration files from `serving/config/`
+- ✅ Programmatic endpoint configuration using Databricks SDK
 - ✅ Dynamic model version detection from training output
 - ✅ Automatic directory navigation (works from project root or scripts folder)
 - ✅ Comprehensive error handling and status reporting
@@ -114,20 +114,12 @@ mlops_stack_taxi_fares/
 │       └── notebooks/
 │           └── TrainWithFeatureStore.py    # Main training notebook
 │
-├── 🚀 MODEL SERVING
-│   └── serving/
-│       ├── notebooks/
-│       │   ├── OnlineTableDeployment.py     # Online tables & serving setup
-│       │   └── ValidationNotebook.py        # End-to-end validation
-│       ├── config/
-│       │   ├── serving_endpoint_config.json # Active serving configuration
-│       │   ├── test_single_prediction.json  # Single prediction test
-│       │   └── test_batch_predictions.json  # Batch prediction test
-│       └── README.md                        # Serving-specific documentation
-│
-├── 🔄 DEPLOYMENT (Legacy/Traditional)
+├── 🚀 MODEL DEPLOYMENT & SERVING
 │   └── deployment/
-│       ├── model_deployment/           # Traditional deployment methods
+│       ├── model_deployment/           # Model deployment with online tables
+│       │   ├── deploy.py               # Consolidated deployment script (Python)
+│       │   └── notebooks/
+│       │       └── ModelDeployment.py  # Databricks notebook wrapper for deployment
 │       └── batch_inference/            # Batch prediction pipeline
 │           ├── predict.py              # Batch inference logic
 │           └── notebooks/
@@ -206,30 +198,37 @@ mlops_stack_taxi_fares/
 **Purpose**: Deploy model to serving endpoint with online feature lookup
 
 **Files Involved**:
-- `serving/notebooks/OnlineTableDeployment.py` - Deployment orchestration
-- `serving/config/serving_endpoint_config.json` - Endpoint configuration
+- `deployment/model_deployment/deploy.py` - Consolidated deployment script (Python)
+- `deployment/model_deployment/notebooks/ModelDeployment.py` - Notebook wrapper (Databricks)
 - Unity Catalog online tables for feature serving
 
 **Process**:
-1. Create or update online tables from feature store
-2. Configure serving endpoint with Unity Catalog integration
-3. Deploy model version to serving endpoint
-4. Configure traffic routing and auto-scaling
-5. Enable auto-capture for payload logging
+1. Parse model URI and extract version information
+2. Create or update online tables from feature store tables
+3. Configure serving endpoint with Unity Catalog integration  
+4. Deploy model version to serving endpoint with feature lookup
+5. Configure traffic routing, auto-scaling, and auto-capture
+6. Verify endpoint status and wait for readiness
+7. Print deployment summary with endpoint details
+
+**Deployment Options**:
+- **Direct Python**: `python deployment/model_deployment/deploy.py <model_uri> <env>`
+- **Databricks Notebook**: Run `ModelDeployment.py` as part of workflow job
+- **Programmatic**: Import and call `deploy_with_online_tables()` function
 
 **Outputs**:
-- Serving endpoint: `mlops-taxi-fare-endpoint`
-- Online tables for sub-millisecond feature lookup
-- Auto-capture enabled for monitoring
+- Serving endpoint: `nytaxifares` 
+- Online tables: `trip_pickup_features_online`, `trip_dropoff_features_online`
+- Model alias set for environment tracking
+- Auto-capture enabled for payload and performance monitoring
 
 ### Step 4: Testing & Validation
 
 **Purpose**: Comprehensive testing of serving functionality
 
 **Files Involved**:
-- `serving/notebooks/ValidationNotebook.py` - End-to-end validation
-- `serving/config/test_single_prediction.json` - Single prediction test
-- `serving/config/test_batch_predictions.json` - Batch prediction test
+- `deployment/model_deployment/deploy.py` - Consolidated deployment with online tables
+- `scripts/test_api_endpoints.sh` - HTTP API endpoint testing
 - `deployment/batch_inference/notebooks/BatchInference.py` - Batch testing
 
 **Process**:
@@ -365,49 +364,6 @@ resources:
 - Model training with feature store data
 - Performance evaluation
 
-### Serving Configuration Files
-
-#### `serving/config/serving_endpoint_config.json`
-```json
-{
-  "name": "mlops-taxi-fare-endpoint",
-  "config": {
-    "served_entities": [
-      {
-        "entity_name": "p03.e2e_demo_simon.dev_mlops_stacks_gcp_fs_model",
-        "entity_version": "18",
-        "workload_size": "Small",
-        "scale_to_zero_enabled": true,
-        "workload_type": "CPU"
-      }
-    ],
-    "auto_capture_config": {
-      "catalog_name": "p03",
-      "schema_name": "e2e_demo_simon", 
-      "table_name_prefix": "taxi_fare_endpoint"
-    }
-  }
-}
-```
-
-**Purpose**: Configuration for serving endpoint creation and updates.
-
-#### `serving/config/test_single_prediction.json`
-```json
-{
-  "dataframe_records": [
-    {
-      "pickup_location_id": 161,
-      "dropoff_location_id": 141,
-      "trip_distance": 1.0,
-      "fare_amount": 7.0,
-      "pickup_datetime": "2023-01-01 12:00:00"
-    }
-  ]
-}
-```
-
-**Purpose**: Test input for single real-time predictions.
 
 ## 🚀 Asset Bundle Configuration
 
@@ -469,12 +425,16 @@ databricks bundle run feature_engineering_job --target dev
 # 3. Run Model Training  
 databricks bundle run model_training_job --target dev
 
-# 4. Deploy Model Serving
-# Run serving/notebooks/OnlineTableDeployment.py in Databricks workspace
+# 4. Deploy Model Serving (choose one option)
+
+## Option A: Direct Python Script
+python deployment/model_deployment/deploy.py p03.e2e_demo_simon.dev_mlops_stack_taxi_fares_model dev
+
+## Option B: Databricks Notebook (part of workflow)
+# Run ModelDeployment.py notebook in Databricks workspace or as part of multi-task job
 
 # 5. Test Serving
-databricks serving-endpoints query mlops-taxi-fare-endpoint \
-  --json @serving/config/test_single_prediction.json
+bash scripts/test_api_endpoints.sh
 
 # 6. Run Batch Inference
 databricks bundle run batch_inference_job --target dev
@@ -492,69 +452,3 @@ databricks bundle run batch_inference_job --target dev
 # Help and options
 ./run_e2e_mlops_pipeline.sh --help
 ```
-
-## 📊 Monitoring & Validation
-
-### Endpoint Monitoring
-- **Health Checks**: `databricks serving-endpoints get mlops-taxi-fare-endpoint`
-- **Logs**: Available in Databricks workspace under Serving > Endpoints
-- **Metrics**: Auto-capture enabled for payload logging
-- **Performance**: Latency and throughput monitoring
-
-### Model Performance
-- **MLflow Tracking**: Experiment metrics and artifacts
-- **Model Registry**: Version management and stage transitions
-- **Feature Store**: Feature lineage and data quality
-- **Auto-capture**: Request/response logging for drift detection
-
-### Data Quality
-- **Feature Validation**: Schema and data type checks
-- **Data Drift**: Monitor feature distributions over time
-- **Model Drift**: Compare prediction distributions
-- **Alert Configuration**: Set up notifications for anomalies
-
-## 🔗 Integration Points
-
-### Unity Catalog Integration
-- **Feature Store**: Centralized feature management with governance
-- **Model Registry**: Versioned model storage with lineage tracking  
-- **Online Tables**: Sub-millisecond feature serving
-- **Permissions**: Fine-grained access control
-
-### MLflow Integration  
-- **Experiment Tracking**: Metrics, parameters, and artifacts
-- **Model Registry**: Model versioning and stage management
-- **Model Serving**: Automatic deployment from registry
-- **Model Lineage**: Track data and code dependencies
-
-### Databricks Integration
-- **Asset Bundles**: Infrastructure as code deployment
-- **Jobs**: Workflow orchestration and scheduling
-- **Notebooks**: Interactive development and execution
-- **Compute**: Auto-scaling clusters for different workloads
-
-## 🎯 Best Practices
-
-### Development Workflow
-1. **Feature Development**: Start with feature engineering and validation
-2. **Model Development**: Use feature store for training data
-3. **Testing**: Validate in development environment first
-4. **Deployment**: Use asset bundles for consistent deployments
-5. **Monitoring**: Set up observability from day one
-
-### Code Organization
-- **Modular Design**: Separate feature, training, and serving code
-- **Configuration Management**: Use external config files
-- **Testing**: Comprehensive unit and integration tests
-- **Documentation**: Keep documentation updated with code changes
-
-### Operational Excellence  
-- **Version Control**: Track all code and configuration changes
-- **CI/CD**: Automate testing and deployment pipelines
-- **Monitoring**: Implement comprehensive observability
-- **Security**: Follow principle of least privilege
-- **Disaster Recovery**: Regular backups and tested recovery procedures
-
----
-
-For questions or support, refer to the main project documentation or Databricks workspace resources.
