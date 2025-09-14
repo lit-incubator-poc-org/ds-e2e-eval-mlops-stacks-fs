@@ -328,6 +328,433 @@ After feature joining, the training dataset contains:
 | `count_trips_window_30m_dropoff_zip` | **Feature Store** | Integer | Trip count at dropoff |
 | `dropoff_is_weekend` | **Feature Store** | Integer | Weekend indicator |
 
+### 📦 Feature Engineering Logic Packaging & Deployment
+
+**Critical Challenge**: How does the model at inference time access the same feature engineering logic used during training?
+
+#### **Method 1: MLflow Model Packaging (Recommended)**
+
+MLflow can package feature engineering code directly with the model, ensuring the exact same logic is available at inference time:
+
+```python
+# training/notebooks/TrainWithFeatureStore.py
+import mlflow
+import mlflow.sklearn
+from feature_engineering.feature_engineering_utils import add_rounded_timestamps
+
+class TaxiFareModelWithPreprocessing(mlflow.pyfunc.PythonModel):
+    """
+    Custom MLflow model that includes feature engineering preprocessing.
+    
+    This ensures the SAME feature engineering logic travels with the model.
+    """
+    
+    def __init__(self, model, feature_engineering_config):
+        self.model = model
+        self.config = feature_engineering_config
+        
+    def predict(self, context, model_input):
+        """
+        Prediction method that includes feature engineering.
+        
+        Args:
+            context: MLflow context (contains artifacts)
+            model_input: Raw input data (pandas DataFrame)
+            
+        Returns:
+            Predictions with automatic feature enrichment
+        """
+        # Step 1: Apply SAME preprocessing as training
+        spark = SparkSession.builder.getOrCreate()
+        
+        # Convert pandas to Spark for consistent processing
+        spark_df = spark.createDataFrame(model_input)
+        
+        # Apply IDENTICAL timestamp rounding (packaged with model)
+        preprocessed_df = add_rounded_timestamps(
+            spark_df,
+            pickup_minutes=self.config["pickup_rounding_minutes"],
+            dropoff_minutes=self.config["dropoff_rounding_minutes"]
+        )
+        
+        # Step 2: Feature lookup from online tables
+        enriched_features = self._lookup_online_features(preprocessed_df)
+        
+        # Step 3: Model prediction
+        return self.model.predict(enriched_features)
+    
+    def _lookup_online_features(self, preprocessed_df):
+        """Lookup features from online tables using preprocessed timestamps."""
+        # Implementation details for online feature lookup
+        pass
+
+# Package model WITH feature engineering code
+def log_model_with_preprocessing(model, training_config):
+    """
+    Log model to MLflow with embedded feature engineering logic.
+    """
+    # Create wrapper that includes preprocessing
+    model_wrapper = TaxiFareModelWithPreprocessing(
+        model=model,
+        feature_engineering_config=training_config
+    )
+    
+    # Package feature engineering utilities as model artifacts
+    artifacts = {
+        "feature_utils": "feature_engineering/feature_engineering_utils.py",
+        "config": training_config
+    }
+    
+    # Log to MLflow with preprocessing embedded
+    mlflow.pyfunc.log_model(
+        artifact_path="taxi_fare_model",
+        python_model=model_wrapper,
+        artifacts=artifacts,
+        conda_env={
+            "dependencies": [
+                "python=3.9",
+                "pyspark==3.5.0", 
+                "pandas>=1.5.0",
+                "databricks-feature-engineering>=0.13.0"
+            ]
+        }
+    )
+    
+    return mlflow.get_artifact_uri("taxi_fare_model")
+```
+
+#### **Method 2: Databricks Feature Engineering Client Integration**
+
+Databricks provides native integration where feature engineering logic is embedded in model metadata:
+
+```python
+# During model training
+from databricks.feature_engineering import FeatureEngineeringClient
+
+fe = FeatureEngineeringClient()
+
+# Log model WITH feature lookup specifications
+# YOUR PIPELINE USES THIS APPROACH (Method 2) ✅
+fe.log_model(
+    model=model,                                    # Trained LightGBM model
+    artifact_path="model_packaged",                 # Model artifact path
+    flavor=mlflow.lightgbm,                       # LightGBM flavor (not sklearn)
+    training_set=training_set,                      # CRITICAL: Embeds feature engineering specs
+    registered_model_name=model_name               # Unity Catalog model name
+)
+
+# At inference time - model automatically knows how to do feature lookup
+loaded_model = fe.load_model(model_uri="models:/taxi_fare_prediction_model/6")
+
+# Model.predict() automatically:
+# 1. Applies same preprocessing (from training_set metadata)
+# 2. Looks up features from online tables 
+# 3. Assembles feature vector in correct order
+# 4. Makes prediction
+predictions = loaded_model.predict(raw_inference_data)
+
+## 🔍 **How Feature Engineering Logic Gets Embedded in Model Metadata**
+
+When you call `fe.log_model(training_set=training_set)`, the **`training_set` object contains all the feature engineering specifications** that get embedded as model metadata:
+
+### **What Gets Stored in Model Metadata:**
+
+#### **1. Feature Lookup Specifications**
+```python
+# These FeatureLookup objects from your training are stored as metadata:
+pickup_feature_lookups = [
+    FeatureLookup(
+        table_name="p03.e2e_demo_simon.trip_pickup_features",
+        feature_names=["mean_fare_window_1h_pickup_zip", "count_trips_window_1h_pickup_zip"],
+        lookup_key=["pickup_zip"],
+        timestamp_lookup_key=["rounded_pickup_datetime"],  # Preprocessing logic embedded
+    )
+]
+
+dropoff_feature_lookups = [
+    FeatureLookup(
+        table_name="p03.e2e_demo_simon.trip_dropoff_features", 
+        feature_names=["count_trips_window_30m_dropoff_zip", "dropoff_is_weekend"],
+        lookup_key=["dropoff_zip"],
+        timestamp_lookup_key=["rounded_dropoff_datetime"],  # Preprocessing logic embedded
+    )
+]
+```
+
+#### **2. Training Set Configuration**
+```python
+# This configuration from training_set creation gets stored:
+training_set_metadata = {
+    "feature_lookups": pickup_feature_lookups + dropoff_feature_lookups,
+    "label": "fare_amount",
+    "exclude_columns": ["rounded_pickup_datetime", "rounded_dropoff_datetime"],
+    "preprocessing_requirements": {
+        # Inferred from timestamp_lookup_key usage
+        "requires_rounded_pickup_datetime": True,
+        "requires_rounded_dropoff_datetime": True,
+        "pickup_rounding_interval": "15 minutes",  # From feature table metadata
+        "dropoff_rounding_interval": "30 minutes"  # From feature table metadata
+    }
+}
+```
+
+#### **3. Feature Store Schema Information**
+```python
+# Schema and data type information gets embedded:
+feature_schema_metadata = {
+    "p03.e2e_demo_simon.trip_pickup_features": {
+        "primary_keys": ["pickup_zip", "rounded_pickup_datetime"],
+        "feature_columns": {
+            "mean_fare_window_1h_pickup_zip": "float",
+            "count_trips_window_1h_pickup_zip": "integer"
+        },
+        "online_table": "p03.e2e_demo_simon.trip_pickup_features_online"
+    },
+    "p03.e2e_demo_simon.trip_dropoff_features": {
+        "primary_keys": ["dropoff_zip", "rounded_dropoff_datetime"], 
+        "feature_columns": {
+            "count_trips_window_30m_dropoff_zip": "integer",
+            "dropoff_is_weekend": "integer"
+        },
+        "online_table": "p03.e2e_demo_simon.trip_dropoff_features_online"
+    }
+}
+```
+
+### **How This Metadata Enables Automatic Inference:**
+
+#### **Step 1: Model Loading Reconstructs Feature Pipeline**
+```python
+# When you load the model with fe.load_model()
+loaded_model = fe.load_model(model_uri)
+
+# Internally, the FeatureEngineeringClient:
+# 1. Reads the stored training_set metadata
+# 2. Reconstructs the FeatureLookup specifications
+# 3. Identifies required preprocessing (timestamp rounding)
+# 4. Maps online table connections
+```
+
+#### **Step 2: Automatic Preprocessing at Inference**
+```python
+# When you call loaded_model.predict(raw_data)
+# The model automatically applies the SAME preprocessing pipeline:
+
+def embedded_preprocessing_pipeline(raw_inference_data):
+    """
+    This logic is automatically reconstructed from training_set metadata.
+    """
+    # Apply timestamp rounding (inferred from timestamp_lookup_key requirements)
+    preprocessed_data = add_rounded_timestamps(
+        raw_inference_data,
+        pickup_minutes=15,   # From training_set metadata
+        dropoff_minutes=30   # From training_set metadata
+    )
+    
+    # The preprocessing parameters (15, 30) are derived from the
+    # feature table configurations used during training
+    return preprocessed_data
+```
+
+#### **Step 3: Automatic Feature Lookup**
+```python
+# The model uses embedded FeatureLookup specs to query online tables:
+
+def embedded_feature_lookup_pipeline(preprocessed_data):
+    """
+    Feature lookup pipeline reconstructed from training_set metadata.
+    """
+    enriched_features = {}
+    
+    # Execute each FeatureLookup from training_set metadata
+    for feature_lookup in training_set_metadata["feature_lookups"]:
+        if feature_lookup.table_name == "trip_pickup_features":
+            # Query online table using embedded specifications
+            pickup_features = query_online_table(
+                table="p03.e2e_demo_simon.trip_pickup_features_online",
+                lookup_keys={
+                    "pickup_zip": preprocessed_data["pickup_zip"],
+                    "rounded_pickup_datetime": preprocessed_data["rounded_pickup_datetime"]
+                },
+                feature_names=feature_lookup.feature_names
+            )
+            enriched_features.update(pickup_features)
+    
+    return enriched_features
+```
+
+### **Complete Embedded Pipeline Execution:**
+
+```python
+# This entire pipeline runs automatically when you call model.predict()
+def automatic_inference_pipeline(raw_input):
+    """
+    Complete pipeline reconstructed from model metadata.
+    """
+    # Step 1: Apply preprocessing (from training_set requirements)
+    preprocessed = apply_embedded_preprocessing(raw_input)
+    
+    # Step 2: Feature lookup (from FeatureLookup specs) 
+    features = apply_embedded_feature_lookup(preprocessed)
+    
+    # Step 3: Feature vector assembly (from training schema)
+    feature_vector = assemble_feature_vector(raw_input, features)
+    
+    # Step 4: Model prediction (original trained model)
+    prediction = trained_model.predict(feature_vector)
+    
+    return prediction
+
+# All of this happens automatically - no additional code needed!
+predictions = loaded_model.predict(raw_inference_data)
+```
+
+### **Key Benefits of This Approach:**
+
+✅ **Zero-Code Inference**: No need to manually implement preprocessing or feature lookup  
+✅ **Perfect Consistency**: Same logic guaranteed between training and serving  
+✅ **Automatic Updates**: If feature tables update, online lookups get fresh data  
+✅ **Schema Evolution**: Model adapts to compatible feature schema changes  
+✅ **Error Handling**: Built-in fallbacks for missing features or lookup failures  
+
+**This is why Method 2 (Databricks Feature Engineering Client) is so powerful** - the `training_set` object acts as a "blueprint" that gets stored with the model, enabling completely automatic feature engineering at inference time!
+```
+
+#### **Method 3: Shared Code Deployment**
+
+Deploy feature engineering utilities alongside serving infrastructure:
+
+```python
+# deployment/model_deployment/deploy.py
+def deploy_with_feature_engineering():
+    """
+    Deploy model with feature engineering utilities to serving environment.
+    """
+    
+    # 1. Package feature engineering code
+    feature_engineering_package = create_code_package([
+        "feature_engineering/feature_engineering_utils.py",
+        "feature_engineering/features/pickup_features.py", 
+        "feature_engineering/features/dropoff_features.py"
+    ])
+    
+    # 2. Deploy to serving cluster with model
+    serving_endpoint = EndpointCoreConfigInput(
+        name="taxi-fare-serving-endpoint",
+        served_entities=[
+            ServedEntityInput(
+                entity_name="taxi_fare_prediction_model",
+                entity_version="6",
+                workload_size="Small",
+                scale_to_zero_enabled=True,
+                environment_vars={
+                    # Include feature engineering config
+                    "PICKUP_ROUNDING_MINUTES": "15",
+                    "DROPOFF_ROUNDING_MINUTES": "30",
+                    "FEATURE_ENGINEERING_VERSION": "v1.2.3"
+                }
+            )
+        ]
+    )
+    
+    # 3. Model serving code imports utilities
+    """
+    # In serving environment: 
+    from feature_engineering_utils import add_rounded_timestamps
+    
+    def score_model(model_input):
+        # Same preprocessing as training
+        preprocessed = add_rounded_timestamps(model_input, 15, 30)
+        # ... rest of inference pipeline
+    """
+    
+    return workspace.serving_endpoints.create_and_wait(endpoint_config=serving_endpoint)
+```
+
+#### **Method 4: Docker Container Packaging**
+
+Package everything together in a Docker container:
+
+```dockerfile
+# Dockerfile for model serving with feature engineering
+FROM databricks/runtime:13.3-ML
+
+# Copy feature engineering utilities
+COPY feature_engineering/ /app/feature_engineering/
+COPY deployment/model_deployment/ /app/deployment/
+
+# Install dependencies
+RUN pip install databricks-feature-engineering>=0.13.0
+
+# Set working directory
+WORKDIR /app
+
+# Model serving entrypoint includes feature engineering
+CMD ["python", "deployment/serve_model_with_features.py"]
+```
+
+```python
+# deployment/serve_model_with_features.py
+from feature_engineering.feature_engineering_utils import add_rounded_timestamps
+import mlflow
+
+class ModelServingWithFeatures:
+    def __init__(self):
+        # Load model
+        self.model = mlflow.pyfunc.load_model("models:/taxi_fare_prediction_model/6")
+        
+        # Feature engineering config (same as training)
+        self.config = {
+            "pickup_rounding_minutes": 15,
+            "dropoff_rounding_minutes": 30
+        }
+    
+    def predict(self, request_data):
+        # Apply SAME feature engineering as training
+        preprocessed = self._preprocess_request(request_data)
+        enriched = self._lookup_features(preprocessed)
+        return self.model.predict(enriched)
+    
+    def _preprocess_request(self, request_data):
+        # Uses IDENTICAL logic from training pipeline
+        return add_rounded_timestamps(
+            request_data, 
+            **self.config
+        )
+```
+
+#### **Best Practice: Hybrid Approach**
+
+**Recommended Architecture**:
+1. **MLflow Model Packaging**: Embed core feature engineering logic with model
+2. **Shared Utilities**: Deploy common utilities to serving environment
+3. **Configuration Management**: Centralize feature engineering parameters
+4. **Validation Pipeline**: Ensure consistency across environments
+
+```python
+# Complete deployment strategy
+def deploy_model_with_feature_consistency():
+    """
+    Deploy model ensuring feature engineering consistency.
+    """
+    
+    # 1. Package model with preprocessing logic
+    model_uri = log_model_with_preprocessing(trained_model, feature_config)
+    
+    # 2. Create online tables for feature serving
+    online_table_names = create_online_tables()
+    
+    # 3. Deploy serving endpoint with feature engineering
+    endpoint = deploy_serving_endpoint(model_uri, online_table_names)
+    
+    # 4. Validate training-serving consistency
+    validate_preprocessing_consistency(model_uri, test_data)
+    
+    return endpoint
+```
+
+This ensures that **the exact same feature engineering logic used during training is available and used during inference**, preventing training-serving skew and maintaining model performance in production.
+
 ## 🚀 Features in Real-time Serving
 
 ### Online Tables Architecture
@@ -383,12 +810,278 @@ During inference, the serving endpoint automatically performs feature lookups:
 
 #### **Automatic Feature Enrichment**
 
-The serving endpoint automatically:
-1. **Rounds Timestamps**: Convert `pickup_datetime` to `rounded_pickup_datetime`
-2. **Lookup Pickup Features**: Query `trip_pickup_features_online` using `pickup_zip` + `rounded_pickup_datetime`
-3. **Lookup Dropoff Features**: Query `trip_dropoff_features_online` using `dropoff_zip` + `rounded_dropoff_datetime`  
-4. **Enrich Request**: Combine input data with retrieved features
-5. **Model Inference**: Score enriched data with trained model
+The serving endpoint performs sophisticated automatic feature enrichment through a multi-step process that seamlessly augments incoming requests with historical features from online tables:
+
+##### **Step 1: Request Preprocessing & Timestamp Alignment**
+
+**CRITICAL**: The serving pipeline must reuse the **exact same feature engineering logic** used during training to ensure consistency. This includes the timestamp rounding functions from `feature_engineering_utils.py`.
+
+```python
+from feature_engineering.feature_engineering_utils import add_rounded_timestamps
+from pyspark.sql.functions import col, ceil, unix_timestamp, from_unixtime
+from pyspark.sql import SparkSession
+
+def preprocess_request_spark(request_data):
+    """
+    Preprocess incoming request using the SAME utilities as training pipeline.
+    
+    This ensures feature engineering consistency between training and serving.
+    """
+    spark = SparkSession.getActiveSession()
+    
+    # Convert request to Spark DataFrame (same format as training data)
+    request_df = spark.createDataFrame([{
+        "tpep_pickup_datetime": request_data["pickup_datetime"],
+        "tpep_dropoff_datetime": request_data.get("dropoff_datetime", request_data["pickup_datetime"]),
+        **request_data
+    }])
+    
+    # Apply SAME timestamp rounding as training pipeline
+    # Uses identical logic: ceil-based rounding with Spark built-in functions
+    preprocessed_df = add_rounded_timestamps(
+        request_df,
+        pickup_minutes=15,    # Must match training configuration
+        dropoff_minutes=30    # Must match training configuration  
+    )
+    
+    # Extract processed values
+    row = preprocessed_df.collect()[0]
+    return {
+        **request_data,
+        "rounded_pickup_datetime": row["rounded_pickup_datetime"],
+        "rounded_dropoff_datetime": row["rounded_dropoff_datetime"]
+    }
+
+def round_timestamp_to_interval_serving(timestamp_str: str, minutes: int) -> str:
+    """
+    Serving-optimized version that replicates training logic exactly.
+    
+    Replicates the SAME logic as feature_engineering_utils.round_timestamp_to_interval:
+    1. Convert timestamp to Unix timestamp (seconds)  
+    2. Divide by interval seconds to get fractional intervals
+    3. Use ceil() to round up to next interval
+    4. Multiply back and convert to timestamp
+    """
+    import pandas as pd
+    import math
+    
+    # Parse timestamp
+    dt = pd.to_datetime(timestamp_str)
+    
+    # Convert to Unix timestamp (matches Spark's unix_timestamp function)
+    unix_ts = dt.timestamp()
+    
+    # Apply SAME logic as training: ceil-based rounding
+    interval_seconds = minutes * 60
+    rounded_unix = math.ceil(unix_ts / interval_seconds) * interval_seconds
+    
+    # Convert back to timestamp (matches Spark's from_unixtime function)
+    rounded_dt = pd.to_datetime(rounded_unix, unit='s')
+    
+    return rounded_dt.strftime('%Y-%m-%d %H:%M:%S')
+
+def preprocess_request_optimized(request_data):
+    """
+    High-performance preprocessing that maintains training consistency.
+    
+    Uses the same mathematical logic as training but optimized for single requests.
+    """
+    return {
+        **request_data,
+        "rounded_pickup_datetime": round_timestamp_to_interval_serving(
+            request_data["pickup_datetime"], 15
+        ),
+        "rounded_dropoff_datetime": round_timestamp_to_interval_serving(
+            request_data.get("dropoff_datetime", request_data["pickup_datetime"]), 30
+        )
+    }
+```
+
+**Why This Consistency Matters**:
+- **Training-Serving Skew Prevention**: Identical preprocessing prevents model degradation
+- **Mathematical Precision**: Same rounding logic ensures exact timestamp alignment  
+- **Feature Store Compatibility**: Rounded timestamps match feature table primary keys
+- **Debugging & Validation**: Consistent logic enables end-to-end testing
+
+##### **Step 2: Parallel Feature Lookup Execution**
+The serving endpoint executes **concurrent lookups** against multiple online tables:
+
+```python
+# Parallel feature lookup implementation
+async def lookup_features_parallel(preprocessed_request):
+    """
+    Execute parallel feature lookups for optimal latency.
+    """
+    pickup_lookup_task = asyncio.create_task(
+        lookup_pickup_features(
+            pickup_zip=preprocessed_request["pickup_zip"],
+            timestamp=preprocessed_request["rounded_pickup_datetime"]
+        )
+    )
+    
+    dropoff_lookup_task = asyncio.create_task(
+        lookup_dropoff_features(
+            dropoff_zip=preprocessed_request["dropoff_zip"], 
+            timestamp=preprocessed_request["rounded_dropoff_datetime"]
+        )
+    )
+    
+    # Execute lookups concurrently (typical latency: <5ms total)
+    pickup_features, dropoff_features = await asyncio.gather(
+        pickup_lookup_task, 
+        dropoff_lookup_task
+    )
+    
+    return {**pickup_features, **dropoff_features}
+```
+
+##### **Step 3: Feature Lookup Mechanisms**
+
+**Pickup Feature Lookup**:
+```sql
+-- Online table query for pickup features
+SELECT 
+    mean_fare_window_1h_pickup_zip,
+    count_trips_window_1h_pickup_zip
+FROM p03.e2e_demo_simon.trip_pickup_features_online 
+WHERE pickup_zip = '10001' 
+  AND rounded_pickup_datetime = '2023-01-01 12:00:00'
+```
+
+**Dropoff Feature Lookup**:
+```sql  
+-- Online table query for dropoff features
+SELECT 
+    count_trips_window_30m_dropoff_zip,
+    dropoff_is_weekend
+FROM p03.e2e_demo_simon.trip_dropoff_features_online
+WHERE dropoff_zip = '10002'
+  AND rounded_dropoff_datetime = '2023-01-01 12:00:00'
+```
+
+##### **Step 4: Feature Fallback & Error Handling**
+
+The system implements **graceful degradation** for missing or stale features:
+
+```python
+def handle_missing_features(lookup_results, request_data):
+    """
+    Handle missing features with intelligent fallbacks.
+    """
+    enriched_features = {}
+    
+    # Pickup feature fallbacks
+    if "mean_fare_window_1h_pickup_zip" not in lookup_results:
+        # Fallback to historical average for this pickup zone
+        enriched_features["mean_fare_window_1h_pickup_zip"] = get_zone_average(
+            request_data["pickup_zip"]
+        )
+        
+    if "count_trips_window_1h_pickup_zip" not in lookup_results:
+        # Fallback to time-of-day baseline
+        enriched_features["count_trips_window_1h_pickup_zip"] = get_baseline_count(
+            pickup_hour=pd.to_datetime(request_data["pickup_datetime"]).hour
+        )
+    
+    # Dropoff feature fallbacks
+    if "dropoff_is_weekend" not in lookup_results:
+        # Compute weekend flag from timestamp
+        dt = pd.to_datetime(request_data["pickup_datetime"])
+        enriched_features["dropoff_is_weekend"] = int(dt.weekday() >= 5)
+        
+    return {**lookup_results, **enriched_features}
+```
+
+##### **Step 5: Feature Vector Assembly & Validation**
+
+```python
+def assemble_feature_vector(raw_request, online_features):
+    """
+    Combine request data with online features into model input format.
+    """
+    # Ensure feature ordering matches training schema
+    feature_vector = {
+        # Raw request features (in training order)
+        "pickup_zip": raw_request["pickup_zip"],
+        "dropoff_zip": raw_request["dropoff_zip"],
+        "trip_distance": float(raw_request["trip_distance"]),
+        
+        # Online features (must match training feature names exactly)
+        "mean_fare_window_1h_pickup_zip": online_features.get(
+            "mean_fare_window_1h_pickup_zip", 0.0
+        ),
+        "count_trips_window_1h_pickup_zip": online_features.get(
+            "count_trips_window_1h_pickup_zip", 0
+        ),
+        "count_trips_window_30m_dropoff_zip": online_features.get(
+            "count_trips_window_30m_dropoff_zip", 0
+        ),
+        "dropoff_is_weekend": online_features.get("dropoff_is_weekend", 0)
+    }
+    
+    # Validate feature types and ranges
+    validate_feature_vector(feature_vector)
+    
+    return feature_vector
+
+def validate_feature_vector(features):
+    """Validate feature vector before model inference."""
+    assert isinstance(features["mean_fare_window_1h_pickup_zip"], float)
+    assert features["mean_fare_window_1h_pickup_zip"] >= 0
+    assert isinstance(features["count_trips_window_1h_pickup_zip"], int) 
+    assert features["dropoff_is_weekend"] in [0, 1]
+```
+
+##### **Step 6: Complete End-to-End Flow**
+
+```python
+# Complete automatic enrichment pipeline
+async def enrich_and_predict(request):
+    """
+    Complete feature enrichment and prediction pipeline.
+    """
+    # Step 1: Preprocess request
+    preprocessed = preprocess_request(request)
+    
+    # Step 2: Parallel feature lookups (typically <5ms)
+    online_features = await lookup_features_parallel(preprocessed)
+    
+    # Step 3: Handle missing features with fallbacks
+    complete_features = handle_missing_features(online_features, request)
+    
+    # Step 4: Assemble final feature vector
+    feature_vector = assemble_feature_vector(request, complete_features)
+    
+    # Step 5: Model inference
+    prediction = model.predict([feature_vector])
+    
+    return {
+        "prediction": prediction[0],
+        "features_used": feature_vector,
+        "lookup_latency_ms": get_lookup_latency(),
+        "feature_freshness": get_feature_timestamps(online_features)
+    }
+```
+
+##### **Performance & Reliability Characteristics**
+
+**Latency Breakdown**:
+- **Request Preprocessing**: <1ms (timestamp rounding, validation)
+- **Feature Lookups**: 2-5ms (parallel online table queries)  
+- **Feature Assembly**: <1ms (vector construction, validation)
+- **Model Inference**: 5-15ms (depends on model complexity)
+- **Total End-to-End**: <25ms (95th percentile)
+
+**Reliability Features**:
+- **Automatic Retries**: Failed lookups retry with exponential backoff
+- **Circuit Breakers**: Protect against cascading failures
+- **Graceful Degradation**: Fallback to default features when lookups fail
+- **Monitoring**: Real-time metrics on feature lookup success rates
+
+**Consistency Guarantees**:
+- **Eventual Consistency**: Online tables sync within seconds of source updates
+- **Read Consistency**: All features read from same snapshot timestamp
+- **Cache Coherency**: Feature cache invalidation on source table updates
 
 #### **Enriched Feature Vector** (Internal)
 ```python
@@ -502,6 +1195,128 @@ def validate_features(feature_df):
 - **Lineage Visualization**: End-to-end data flow diagrams
 
 ## 🎯 Best Practices
+
+### Training-Serving Consistency (Critical)
+
+**The most important principle**: **Feature engineering logic must be identical between training and serving**. Any deviation can cause training-serving skew and model performance degradation.
+
+#### **1. Shared Feature Engineering Utilities**
+
+**✅ Correct Approach**: Use shared utility modules
+```python
+# feature_engineering/feature_engineering_utils.py (SHARED MODULE)
+def add_rounded_timestamps(df: DataFrame, pickup_minutes: int = 15, dropoff_minutes: int = 30):
+    """Shared timestamp rounding logic used in both training and serving."""
+    def round_timestamp_to_interval(timestamp_col, minutes: int):
+        interval_seconds = minutes * 60
+        rounded_unix = ceil(unix_timestamp(timestamp_col) / interval_seconds) * interval_seconds
+        return from_unixtime(rounded_unix).cast("timestamp")
+    
+    return df.withColumn("rounded_pickup_datetime", round_timestamp_to_interval(...))
+
+# Training Pipeline (training/notebooks/TrainWithFeatureStore.py)
+from feature_engineering.feature_engineering_utils import add_rounded_timestamps
+preprocessed_training_data = add_rounded_timestamps(raw_training_data)
+
+# Serving Pipeline (deployment/model_deployment/deploy.py) 
+from feature_engineering.feature_engineering_utils import add_rounded_timestamps  # SAME IMPORT
+preprocessed_serving_data = add_rounded_timestamps(serving_request_df)
+```
+
+**❌ Wrong Approach**: Duplicate logic with subtle differences
+```python
+# Training: Uses ceil-based rounding
+rounded_pickup = math.ceil(unix_ts / interval_seconds) * interval_seconds
+
+# Serving: Uses floor-based rounding (INCONSISTENT!)  
+rounded_pickup = math.floor(unix_ts / interval_seconds) * interval_seconds
+# This will cause serving requests to look up wrong feature values!
+```
+
+#### **2. Mathematical Precision Consistency**
+
+**Critical**: Ensure mathematical operations produce identical results across environments.
+
+```python
+# ✅ Good: Use same mathematical operations
+# Training (Spark)
+F.ceil(F.unix_timestamp(col("pickup_datetime")) / 900) * 900
+
+# Serving (Python equivalent)
+math.ceil(pd.to_datetime(timestamp).timestamp() / 900) * 900
+
+# ✅ Good: Validate consistency with unit tests
+def test_timestamp_rounding_consistency():
+    """Ensure training and serving timestamp rounding produce identical results."""
+    test_timestamp = "2023-01-01 12:37:42"
+    
+    # Training result (Spark)
+    training_result = spark_round_timestamp(test_timestamp, 15)
+    
+    # Serving result (Python)  
+    serving_result = python_round_timestamp(test_timestamp, 15)
+    
+    assert training_result == serving_result
+```
+
+#### **3. Configuration Consistency**
+
+**Ensure all feature engineering parameters match exactly**:
+
+```python
+# ✅ Good: Centralized configuration
+# config/feature_config.py
+FEATURE_CONFIG = {
+    "pickup_rounding_minutes": 15,
+    "dropoff_rounding_minutes": 30,
+    "pickup_window_size": "1 hour",
+    "dropoff_window_size": "30 minutes"
+}
+
+# Training uses config
+preprocessed = add_rounded_timestamps(
+    df, 
+    pickup_minutes=FEATURE_CONFIG["pickup_rounding_minutes"],
+    dropoff_minutes=FEATURE_CONFIG["dropoff_rounding_minutes"]
+)
+
+# Serving uses SAME config  
+preprocessed = add_rounded_timestamps(
+    df,
+    pickup_minutes=FEATURE_CONFIG["pickup_rounding_minutes"],  # IDENTICAL
+    dropoff_minutes=FEATURE_CONFIG["dropoff_rounding_minutes"]  # IDENTICAL
+)
+```
+
+#### **4. End-to-End Validation**
+
+**Implement validation pipelines to catch training-serving skew**:
+
+```python
+def validate_training_serving_consistency():
+    """
+    Validate that same input produces same features in training and serving.
+    """
+    # Test data
+    test_input = {
+        "pickup_datetime": "2023-01-01 12:37:42",
+        "dropoff_datetime": "2023-01-01 12:45:33", 
+        "pickup_zip": "10001",
+        "dropoff_zip": "10002"
+    }
+    
+    # Process through training pipeline
+    training_features = training_preprocess(test_input)
+    
+    # Process through serving pipeline  
+    serving_features = serving_preprocess(test_input)
+    
+    # Assert identical results
+    assert training_features["rounded_pickup_datetime"] == serving_features["rounded_pickup_datetime"]
+    assert training_features["rounded_dropoff_datetime"] == serving_features["rounded_dropoff_datetime"]
+    
+    print("SUCCESS: Training and serving preprocessing produces identical results")
+```
 
 ### Feature Engineering Best Practices
 
