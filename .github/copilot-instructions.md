@@ -13,13 +13,20 @@ This is a **MLOps Pipeline** is deployed on Azure Databricks. The project implem
 
 ## Code Generation Guidelines
 
+### ⚠️ CRITICAL FORMATTING RULES ⚠️
+**ABSOLUTELY NO EMOJIS OR UNICODE ICONS IN ANY GENERATED CODE**
+- Do NOT use ANY emojis/icons
+- DO use plain text: "ERROR:", "SUCCESS:", "INFO:", "WARNING:", "TIP:"
+- This applies to ALL code: Python, bash scripts, notebooks, documentation, comments
+- Use descriptive text labels instead of visual symbols
+- Example: Use "ERROR: Connection failed" instead of "❌ Connection failed"
+
 ### General Principles
 - Follow PEP 8 Python coding standards
 - Use type hints for all function parameters and return values
 - Include comprehensive docstrings for all functions and classes
 - Implement proper error handling with try-catch blocks
 - Use logging instead of print statements for production code
-- **Never use emojis in generated code** - use plain text for messages
 - Follow secure coding practices, especially for secrets management
 - Use meaningful variable names that reflect the taxi fare prediction domain
 
@@ -88,6 +95,16 @@ This is a **MLOps Pipeline** is deployed on Azure Databricks. The project implem
 - Use broadcast joins where appropriate
 - Optimize file sizes and formats for query performance
 - Monitor and tune resource utilization
+
+### Output Messages and Logging Standards
+**MANDATORY: All output messages must use plain text labels**
+- Use "ERROR:" prefix for error messages
+- Use "SUCCESS:" prefix for successful operations  
+- Use "INFO:" prefix for informational messages
+- Use "WARNING:" prefix for warnings
+- Use "TIP:" prefix for helpful suggestions
+- Use "PROGRESS:" prefix for status updates
+- Never use emojis, icons, or Unicode symbols in any output
 
 ### Specific Implementation Patterns
 
