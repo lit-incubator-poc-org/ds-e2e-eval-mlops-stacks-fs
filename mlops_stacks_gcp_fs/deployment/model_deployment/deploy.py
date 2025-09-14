@@ -8,110 +8,103 @@ from mlflow.tracking import MlflowClient
 from databricks.feature_engineering import FeatureEngineeringClient
 
 
-def enable_online_feature_store(catalog_name="p03", schema_name="e2e_demo_simon"):
+def create_online_tables(catalog_name="p03", schema_name="e2e_demo_simon"):
     """
-    Enable Databricks-managed online feature store for feature tables required by the model.
-    Uses the new databricks-feature-engineering package for both AWS and Azure.
+    Create Databricks Online Tables for feature tables required by the model.
+    Uses the modern Online Tables approach following Unity Catalog best practices.
     
     :param catalog_name: Unity Catalog name
     :param schema_name: Schema name containing feature tables
     """
-    fe = FeatureEngineeringClient()
+    from databricks.sdk import WorkspaceClient
+    from databricks.sdk.service.catalog import OnlineTable, OnlineTableSpec, OnlineTableSpecTriggeredSchedulingPolicy
+    
+    workspace = WorkspaceClient()
     
     # Feature tables used by the model
     feature_tables = [
-        f"{catalog_name}.{schema_name}.trip_pickup_features",
-        f"{catalog_name}.{schema_name}.trip_dropoff_features"
+        {
+            "source": f"{catalog_name}.{schema_name}.trip_pickup_features",
+            "online": f"{catalog_name}.{schema_name}.trip_pickup_features_online",
+            "primary_keys": ["pickup_zip", "rounded_pickup_datetime"]
+        },
+        {
+            "source": f"{catalog_name}.{schema_name}.trip_dropoff_features", 
+            "online": f"{catalog_name}.{schema_name}.trip_dropoff_features_online",
+            "primary_keys": ["dropoff_zip", "rounded_dropoff_datetime"]
+        }
     ]
     
-    print("🚀 Setting up Databricks-managed Online Feature Store...")
+    print("� Setting up Databricks Online Tables for real-time feature serving...")
     
-    # Step 1: Create or get the online store
-    store_name = "mlops-feature-store"
-    try:
-        # Check if store already exists
-        online_store = fe.get_online_store(name=store_name)
-        print(f"✅ Online store '{store_name}' already exists (State: {online_store.state})")
-    except:
-        print(f"🔄 Creating new online store '{store_name}'...")
-        try:
-            online_store = fe.create_online_store(
-                name=store_name,
-                capacity="CU_1"  # Start with minimal capacity
-            )
-            print(f"✅ Created online store '{store_name}' (State: {online_store.state})")
-        except Exception as e:
-            print(f"❌ Failed to create online store: {str(e)}")
-            return
+    online_tables_created = []
     
-    # Step 2: Prepare and publish feature tables
-    for table_name in feature_tables:
+    for table_config in feature_tables:
+        source_table = table_config["source"]
+        online_table_name = table_config["online"]
+        primary_keys = table_config["primary_keys"]
+        
         try:
-            print(f"📋 Processing {table_name}...")
+            print(f"📋 Processing {source_table}...")
+            print(f"   Creating online table: {online_table_name}")
             
-            # Check if table exists and get info
+            # Check if online table already exists
             try:
-                table_info = fe.get_table(name=table_name)
-                print(f"  ✅ Table exists with primary keys: {table_info.primary_keys}")
-            except Exception as e:
-                print(f"  ❌ Table not found: {str(e)}")
+                existing_table = workspace.online_tables.get(online_table_name)
+                print(f"  ✅ Online table already exists (Status: {existing_table.status})")
+                online_tables_created.append(online_table_name)
                 continue
+            except Exception:
+                # Table doesn't exist, create it
+                pass
             
-            # Enable Change Data Feed if not already enabled
-            try:
-                from pyspark.sql import SparkSession
-                spark = SparkSession.builder.getOrCreate()
-                
-                spark.sql(f"""
-                    ALTER TABLE {table_name}
-                    SET TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true')
-                """)
-                print(f"  ✅ Change Data Feed enabled")
-            except Exception as e:
-                print(f"  ⚠️ Could not enable Change Data Feed: {str(e)}")
+            # Create online table spec following best practices
+            spec = OnlineTableSpec(
+                primary_key_columns=primary_keys,
+                source_table_full_name=source_table,
+                run_triggered=OnlineTableSpecTriggeredSchedulingPolicy.from_dict({'triggered': 'true'}),
+                perform_full_copy=True  # Ensure full sync for reliable serving
+            )
             
-            # Publish to online store
-            try:
-                online_table_name = table_name.replace("_features", "_online_features")
-                
-                fe.publish_table(
-                    online_store=online_store,
-                    source_table_name=table_name,
-                    online_table_name=online_table_name
-                )
-                print(f"  ✅ Successfully published to online store as {online_table_name}")
-                
-            except Exception as e:
-                print(f"  ❌ Failed to publish {table_name}: {str(e)}")
+            online_table = OnlineTable(name=online_table_name, spec=spec)
+            
+            # Create and wait for the online table
+            print(f"  🔄 Creating online table...")
+            result = workspace.online_tables.create_and_wait(table=online_table)
+            
+            print(f"  ✅ Online table created successfully!")
+            print(f"  Status: {result.status}")
+            online_tables_created.append(online_table_name)
+            
+        except Exception as e:
+            if "already exists" in str(e).lower():
+                print(f"  ✅ Online table already exists")
+                online_tables_created.append(online_table_name)
+            else:
+                print(f"  ❌ Failed to create online table: {str(e)}")
                 # Continue with other tables
                 continue
-                
-        except Exception as e:
-            print(f"❌ Error processing {table_name}: {str(e)}")
-            continue
     
-    print("🎉 Databricks Online Feature Store setup completed!")
-    print(f"💡 Store state: {online_store.state}")
-    if online_store.state != "AVAILABLE":
-        print("⏳ Note: Online store may take a few minutes to become fully available")
+    print(f"🎉 Online Tables setup completed!")
+    print(f"Created/verified {len(online_tables_created)} online tables:")
+    for table in online_tables_created:
+        print(f"  - {table}")
+    
+    return online_tables_created
 
 
-def deploy(model_uri, env):
+def deploy_with_online_tables(model_uri, env):
     """
-    Deploy the model to Unity Catalog registry by setting an alias
-    Also ensures online feature store is enabled for real-time inference
+    Deploy the model to Unity Catalog registry with Online Tables for real-time inference.
+    Creates serving endpoint with automatic feature lookup capabilities.
     
     :param model_uri: URI of the model in format "models://<name>/<version>" or just "<name>"
     :param env: Environment (dev, staging, prod)
     """
-    # Step 1: Enable online feature store for required tables
-    print("Step 1: Enabling online feature store...")
-    enable_online_feature_store()
+    from databricks.sdk import WorkspaceClient
+    from databricks.sdk.service.serving import EndpointCoreConfigInput, ServedEntityInput
     
-    # Step 2: Set model alias for deployment
-    print("Step 2: Setting model alias for deployment...")
-    alias = get_deployed_model_alias_for_env(env)
-    
+    workspace = WorkspaceClient()
     client = MlflowClient()
     
     # Parse model URI to extract model name and version
@@ -125,17 +118,107 @@ def deploy(model_uri, env):
         model_name = model_uri
         model_version = "1"
     
-    print(f"Setting alias '{alias}' for model '{model_name}' version {model_version}")
+    print(f"🚀 Deploying model: {model_name} (version {model_version})")
+    print(f"📍 Environment: {env}")
     
-    # Set the alias for model serving
+    # Step 1: Create online tables for feature serving
+    print("\nStep 1: Setting up Online Tables...")
+    
+    # Extract catalog and schema from model name for online tables
+    model_parts = model_name.split(".")
+    if len(model_parts) >= 2:
+        catalog_name = model_parts[0]
+        schema_name = model_parts[1]
+    else:
+        # Fallback defaults
+        catalog_name = "p03"
+        schema_name = "e2e_demo_simon"
+    
+    online_tables = create_online_tables(catalog_name, schema_name)
+    
+    # Step 2: Set model alias for deployment tracking
+    print("\nStep 2: Setting model alias for deployment...")
+    alias = get_deployed_model_alias_for_env(env)
+    
+    print(f"Setting alias '{alias}' for model '{model_name}' version {model_version}")
     client.set_registered_model_alias(
         name=model_name,
         alias=alias,
         version=model_version
     )
+    print(f"✅ Model alias '{alias}' set successfully")
     
-    print(f"Successfully deployed model {model_name} (version {model_version}) with alias '{alias}' for environment '{env}'")
-    print(f"Model is now ready for real-time inference with online feature store enabled.")
+    # Step 3: Create serving endpoint with online feature lookup
+    print("\nStep 3: Creating serving endpoint...")
+    
+    # Generate endpoint name
+    endpoint_name = f"{model_name.replace('.', '_').lower()}_endpoint_{env}"
+    
+    try:
+        # Check if endpoint already exists
+        try:
+            existing_endpoint = workspace.serving_endpoints.get(endpoint_name)
+            print(f"✅ Endpoint '{endpoint_name}' already exists (Status: {existing_endpoint.state})")
+            
+        except Exception:
+            # Create new endpoint
+            print(f"🔄 Creating new endpoint: {endpoint_name}")
+            status = workspace.serving_endpoints.create_and_wait(
+                name=endpoint_name,
+                config=EndpointCoreConfigInput(
+                    served_entities=[
+                        ServedEntityInput(
+                            entity_name=model_name,
+                            entity_version=model_version,
+                            scale_to_zero_enabled=True,
+                            workload_size="Small"
+                        )
+                    ]
+                )
+            )
+            print(f"✅ Endpoint created successfully! (Status: {status.state})")
+            
+    except Exception as e:
+        if "already exists" in str(e).lower():
+            print(f"✅ Endpoint '{endpoint_name}' already exists")
+        else:
+            print(f"❌ Failed to create endpoint: {str(e)}")
+            raise e
+    
+    # Success summary
+    print("\n" + "="*60)
+    print("🎉 DEPLOYMENT SUCCESSFUL")
+    print("="*60)
+    print(f"✅ Model: {model_name} (v{model_version})")
+    print(f"✅ Environment: {env}")
+    print(f"✅ Model Alias: {alias}")
+    print(f"✅ Serving Endpoint: {endpoint_name}")
+    print(f"✅ Online Tables: {len(online_tables)} tables configured")
+    
+    for table in online_tables:
+        print(f"   - {table}")
+    
+    print(f"\n🔗 Endpoint URL: https://{workspace.config.host}/ml/endpoints/{endpoint_name}")
+    print("💡 Model is ready for real-time inference with automatic feature lookup!")
+    
+    return {
+        "model_name": model_name,
+        "model_version": model_version,
+        "endpoint_name": endpoint_name,
+        "online_tables": online_tables,
+        "alias": alias
+    }
+
+
+def deploy(model_uri, env):
+    """
+    Legacy deploy function - now redirects to new online tables deployment.
+    Maintained for backward compatibility.
+    
+    :param model_uri: URI of the model in format "models://<name>/<version>" or just "<name>"
+    :param env: Environment (dev, staging, prod)
+    """
+    return deploy_with_online_tables(model_uri, env)
 
 
 if __name__ == "__main__":

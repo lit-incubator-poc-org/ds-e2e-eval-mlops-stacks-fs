@@ -43,12 +43,14 @@ print(f"Checking model: {MODEL_NAME}")
 print()
 
 try:
-    # Get latest model version
-    latest_versions = mlflow_client.get_latest_versions(MODEL_NAME, stages=["None"])
-    if not latest_versions:
+    # For Unity Catalog, use search_model_versions instead of get_latest_versions
+    model_versions = mlflow_client.search_model_versions(f"name='{MODEL_NAME}'")
+    
+    if not model_versions:
         print("No model versions found!")
     else:
-        latest_version = latest_versions[0]
+        # Sort by version number to get the latest
+        latest_version = max(model_versions, key=lambda x: int(x.version))
         print(f"Latest version: {latest_version.version}")
         print(f"Run ID: {latest_version.run_id}")
         print(f"Status: {latest_version.status}")
@@ -102,9 +104,13 @@ try:
     print(f"  Capacity: {online_store.capacity}")
     print()
     
-    if online_store.state != "AVAILABLE":
+    # Check if state is AVAILABLE (comparing enum value properly)
+    if str(online_store.state) != "State.AVAILABLE":
         print("WARNING: Online store is not in AVAILABLE state!")
         print("This could cause feature lookup failures.")
+        print()
+    else:
+        print("✓ Online store is AVAILABLE and ready for serving")
         print()
         
 except Exception as e:
@@ -147,8 +153,9 @@ print("Checking Model Logging Method...")
 print()
 
 try:
-    # Get the run that created the model
-    latest_version = mlflow_client.get_latest_versions(MODEL_NAME, stages=["None"])[0]
+    # Get the run that created the model (Unity Catalog compatible)
+    model_versions = mlflow_client.search_model_versions(f"name='{MODEL_NAME}'")
+    latest_version = max(model_versions, key=lambda x: int(x.version))
     run = mlflow_client.get_run(latest_version.run_id)
     
     print(f"Run ID: {run.info.run_id}")

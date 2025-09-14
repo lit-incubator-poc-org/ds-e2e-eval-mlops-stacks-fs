@@ -84,6 +84,22 @@ resources:
               env: ${bundle.target}
               # git source information of current ML asset deployment. It will be persisted as part of the workflow run
               git_source_info: url:${bundle.git.origin_url}; branch:${bundle.git.branch}; commit:${bundle.git.commit}
+        # Optional: Online Tables Deployment for Real-time Serving
+        # Uncomment this task to enable automatic online tables setup and serving endpoint creation
+        # - task_key: OnlineTableDeployment
+        #   existing_cluster_id: ${var.existing_cluster_id}
+        #   depends_on:
+        #     - task_key: ModelValidation
+        #   notebook_task:
+        #     notebook_path: ../deployment/model_deployment/notebooks/OnlineTableDeployment.py
+        #     base_parameters:
+        #       env: ${bundle.target}
+        #       # Model details will be passed from Train task
+        #       # model_name: ${var.model_name}  # Optional: specify explicit model name
+        #       # model_version: ""              # Optional: specify explicit version, defaults to latest
+        #       # endpoint_name: ""              # Optional: specify endpoint name, auto-generated if empty
+        #       # git source information of current ML asset deployment
+        #       git_source_info: url:${bundle.git.origin_url}; branch:${bundle.git.branch}; commit:${bundle.git.commit}
       schedule:
         quartz_cron_expression: "0 0 9 * * ?" # daily at 9am
         timezone_id: UTC

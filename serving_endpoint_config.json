@@ -1,0 +1,29 @@
+{
+  "name": "mlops-taxi-fare-endpoint",
+  "config": {
+    "served_entities": [
+      {
+        "entity_name": "p03.e2e_demo_simon.dev_mlops_stacks_gcp_fs_model",
+        "entity_version": "16",
+        "workload_size": "Small",
+        "scale_to_zero_enabled": true,
+        "workload_type": "CPU"
+      }
+    ],
+    "auto_capture_config": {
+      "catalog_name": "p03",
+      "schema_name": "e2e_demo_simon",
+      "table_name_prefix": "taxi_fare_endpoint"
+    }
+  },
+  "tags": [
+    {
+      "key": "environment",
+      "value": "dev"
+    },
+    {
+      "key": "project",
+      "value": "mlops-taxi-fare"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "inputs": [
+    {
+      "pickup_zip": "10001",
+      "dropoff_zip": "10002",
+      "trip_distance": 2.5,
+      "pickup_weekday": 1,
+      "pickup_hour": 14,
+      "trip_duration": 15.5
+    },
+    {
+      "pickup_zip": "10003",
+      "dropoff_zip": "10004",
+      "trip_distance": 1.2,
+      "pickup_weekday": 5,
+      "pickup_hour": 18,
+      "trip_duration": 8.0
+    },
+    {
+      "pickup_zip": "10005",
+      "dropoff_zip": "10006",
+      "trip_distance": 5.8,
+      "pickup_weekday": 0,
+      "pickup_hour": 9,
+      "trip_duration": 25.3
+    }
+  ]
+}

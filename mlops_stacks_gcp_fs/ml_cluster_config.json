@@ -1,0 +1,19 @@
+{
+  "cluster_name": "ML-Runtime-Cluster-Unity-Catalog",
+  "spark_version": "17.1.x-cpu-ml-photon-scala2.13",
+  "node_type_id": "Standard_D4s_v3",
+  "driver_node_type_id": "Standard_D4s_v3",
+  "num_workers": 0,
+  "autotermination_minutes": 120,
+  "data_security_mode": "SINGLE_USER",
+  "runtime_engine": "PHOTON",
+  "azure_attributes": {
+    "availability": "ON_DEMAND_AZURE",
+    "first_on_demand": 1,
+    "spot_bid_max_price": -1
+  },
+  "custom_tags": {
+    "Purpose": "Unity-Catalog-Feature-Store",
+    "RuntimeType": "ML"
+  }
+}

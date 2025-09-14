@@ -1,0 +1,12 @@
+{
+  "inputs": [
+    {
+      "pickup_zip": "10001",
+      "dropoff_zip": "10002",
+      "trip_distance": 2.5,
+      "pickup_weekday": 1,
+      "pickup_hour": 14,
+      "trip_duration": 15.5
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "run_name": "OnlineTableDeployment-Manual",
+  "new_cluster": {
+    "num_workers": 2,
+    "spark_version": "17.1.x-cpu-ml-scala2.12",
+    "node_type_id": "Standard_D4s_v3",
+    "custom_tags": {
+      "clusterSource": "online-deployment"
+    }
+  },
+  "notebook_task": {
+    "notebook_path": "/Workspace/Users/simon.curran@liberty-it.co.uk/OnlineTableDeployment",
+    "base_parameters": {
+      "env": "dev",
+      "model_name": "p03.e2e_demo_simon.taxi_fare_regressor",
+      "model_version": "15"
+    }
+  },
+  "timeout_seconds": 3600
+}
