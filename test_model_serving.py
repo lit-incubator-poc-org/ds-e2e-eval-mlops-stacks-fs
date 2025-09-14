@@ -13,7 +13,7 @@ def test_serving_endpoint():
     
     # Databricks workspace URL - you'll need to set this
     workspace_url = "https://adb-8490988242777396.16.azuredatabricks.net"
-    endpoint_name = "mlops-taxi-fare-endpoint"
+    endpoint_name = "nytaxifares"
     
     # You'll need to set your personal access token
     # For security, it should be set as an environment variable

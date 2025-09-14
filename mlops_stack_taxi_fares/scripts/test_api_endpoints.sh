@@ -27,7 +27,7 @@ if [ -z "$DATABRICKS_TOKEN" ]; then
 fi
 
 # Serving endpoint configuration
-ENDPOINT_NAME="mlops-taxi-fare-endpoint"
+ENDPOINT_NAME="nytaxifares"
 ENDPOINT_URL="https://adb-8490988242777396.16.azuredatabricks.net/serving-endpoints/mlops-taxi-fare-endpoint/invocations"
 
 echo "Checking serving endpoint..."

@@ -1,9 +1,9 @@
 {
-  "name": "mlops-taxi-fare-endpoint",
+  "name": "nytaxifares",
   "config": {
     "served_entities": [
       {
-        "entity_name": "p03.e2e_demo_simon.dev_mlops_stacks_gcp_fs_model",
+        "entity_name": "p03.e2e_demo_simon.dev_mlops_stack_taxi_fares_model",
         "entity_version": "20",
         "workload_size": "Small",
         "scale_to_zero_enabled": true,

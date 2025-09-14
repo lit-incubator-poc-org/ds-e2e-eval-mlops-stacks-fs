@@ -29,7 +29,7 @@ PROJECT_NAME="mlops_stacks_gcp_fs"
 CATALOG="p03"
 SCHEMA="e2e_demo_simon"
 MODEL_NAME="${CATALOG}.${SCHEMA}.dev_${PROJECT_NAME}_model"
-ENDPOINT_NAME="mlops-taxi-fare-endpoint"
+ENDPOINT_NAME="nytaxifares"
 
 # Color codes for output
 RED='\033[0;31m'

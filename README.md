@@ -49,7 +49,7 @@ Then, in the Databricks plugin view, select the Cluster.
 
 Navigate to: 
 ```
-mlops_stacks_gcp_fs/feature_engineering/notebooks/GenerateAndWriteFeatures.py
+mlops_stack_taxi_fares/feature_engineering/notebooks/GenerateAndWriteFeatures.py
 ```
 
 Right click -> Run on Databricks -> Run as Workflow
@@ -92,14 +92,14 @@ databricks bundle run write_feature_table_job
 
 Or, you can use the **Bundle Resource Explorer**
 
-Right click on the `dev-mlops_stacks_gcp_fs-write-feature-table-job` -> Deploy the bundle and run the job
+Right click on the `dev-mlops_stack_taxi_fares-write-feature-table-job` -> Deploy the bundle and run the job
 
 
 ## Train a Model (Working in Progress)
 
 Navigate to: 
 ```
-mlops_stacks_gcp_fs/training/notebooks/TrainWithFeatureStore.py
+mlops_stack_taxi_fares/training/notebooks/TrainWithFeatureStore.py
 ```
 
 Right click -> Run on Databricks -> Run as Workflow
@@ -131,9 +131,9 @@ This project contains the following components:
 contained in the following files:
 
 ```
-mlops_stacks_gcp_fs        <- Root directory. Both monorepo and polyrepo are supported.
+mlops_stack_taxi_fares        <- Root directory. Both monorepo and polyrepo are supported.
 │
-├── mlops_stacks_gcp_fs       <- Contains python code, notebooks and ML assets related to one ML project. 
+├── mlops_stack_taxi_fares       <- Contains python code, notebooks and ML assets related to one ML project. 
 │   │
 │   ├── requirements.txt        <- Specifies Python dependencies for ML code (for example: model training, batch inference).
 │   │
@@ -190,7 +190,7 @@ pipelines, ask your ops team to follow the [MLOps setup guide](docs/mlops-setup.
 production ML pipelines.
 
 After that, follow the [ML pull request guide](docs/ml-pull-request.md)
-and [ML asset config guide](mlops_stacks_gcp_fs/assets/README.md) to propose, test, and deploy changes to production ML code (e.g. update model parameters)
+and [ML asset config guide](mlops_stack_taxi_fares/assets/README.md) to propose, test, and deploy changes to production ML code (e.g. update model parameters)
 or pipeline assets (e.g. use a larger instance type for model training) via pull request.
 
 | Role                          | Goal                                                                         | Docs                                                                                                                                                                |
@@ -198,7 +198,7 @@ or pipeline assets (e.g. use a larger instance type for model training) via pull
 | Data Scientist                | Get started writing ML code for a brand new project                          | [ML quickstart](docs/ml-developer-guide-fs.md). |
 | MLOps / DevOps                | Set up CI/CD for the current ML project   | [MLOps setup guide](docs/mlops-setup.md)                                                                                                                            |
 | Data Scientist                | Update production ML code (e.g. model training logic) for an existing project | [ML pull request guide](docs/ml-pull-request.md)                                                                                                                    |
-| Data Scientist                | Modify production model ML assets, e.g. model training or inference jobs  | [ML asset config guide](mlops_stacks_gcp_fs/assets/README.md)                                                     |
+| Data Scientist                | Modify production model ML assets, e.g. model training or inference jobs  | [ML asset config guide](mlops_stack_taxi_fares/assets/README.md)                                                     |
 
 ## Monorepo
 

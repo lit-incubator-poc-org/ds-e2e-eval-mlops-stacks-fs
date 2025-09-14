@@ -1,16 +1,16 @@
-name: Feature and Training Integration Tests for mlops_stacks_gcp_fs
+name: Feature and Training Integration Tests for mlops_stack_taxi_fares
 on:
   workflow_dispatch:
   pull_request:
 
 defaults:
   run:
-    working-directory: ./mlops_stacks_gcp_fs/
+    working-directory: ./mlops_stack_taxi_fares/
 
 env:
   DATABRICKS_TOKEN: ${{ secrets.STAGING_WORKSPACE_TOKEN }}
 
-concurrency: mlops_stacks_gcp_fs-feature-training-integration-test-staging
+concurrency: mlops_stack_taxi_fares-feature-training-integration-test-staging
 
 jobs:
   unit_tests:

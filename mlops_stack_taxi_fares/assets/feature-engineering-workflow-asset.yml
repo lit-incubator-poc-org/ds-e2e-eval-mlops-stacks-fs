@@ -6,7 +6,7 @@ common_permissions: &permissions
 resources:
   jobs:
     write_feature_table_job:
-      name: ${bundle.target}-mlops_stacks_gcp_fs-write-feature-table-job
+      name: ${bundle.target}-mlops_stack_taxi_fares-write-feature-table-job
       tasks:
         - task_key: PickupFeatures
           notebook_task:

@@ -15,15 +15,15 @@
 MLOps Stacks ML assets are configured and deployed through [databricks CLI bundles](https://docs.databricks.com/dev-tools/cli/bundle-cli.html).
 The bundle setting file must be expressed in YAML format and must contain at minimum the top-level bundle mapping.
 
-The databricks CLI bundles top level is defined by file `mlops_stacks_gcp_fs/databricks.yml`.
+The databricks CLI bundles top level is defined by file `mlops_stack_taxi_fares/databricks.yml`.
 During databricks CLI bundles deployment, the root config file will be loaded, validated and deployed to workspace provided by the environment together with all the included assets.
 
 ML Resource Configurations in this directory:
- - model workflow (`mlops_stacks_gcp_fs/assets/model-workflow-asset.yml`)
- - batch inference workflow (`mlops_stacks_gcp_fs/assets/batch-inference-workflow-asset.yml`)
- - monitoring workflow (`mlops_stacks_gcp_fs/assets/monitoring-workflow-asset.yml`)
- - feature engineering workflow (`mlops_stacks_gcp_fs/assets/feature-engineering-workflow-asset.yml`)
- - model definition and experiment definition (`mlops_stacks_gcp_fs/assets/ml-artifacts-asset.yml`)
+ - model workflow (`mlops_stack_taxi_fares/assets/model-workflow-asset.yml`)
+ - batch inference workflow (`mlops_stack_taxi_fares/assets/batch-inference-workflow-asset.yml`)
+ - monitoring workflow (`mlops_stack_taxi_fares/assets/monitoring-workflow-asset.yml`)
+ - feature engineering workflow (`mlops_stack_taxi_fares/assets/feature-engineering-workflow-asset.yml`)
+ - model definition and experiment definition (`mlops_stack_taxi_fares/assets/ml-artifacts-asset.yml`)
 
 
 ### Deployment Config & CI/CD integration
@@ -35,10 +35,10 @@ This project ships with CI/CD workflows for developing and deploying ML asset co
 
 | Deployment Target | Description                                                                                                                                                                                                                           | Databricks Workspace | Model Name                          | Experiment Name                                |
 |-------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------|-------------------------------------|------------------------------------------------|
-| dev         | The `dev` deployment target is used by ML engineers to deploy ML assets to development workspace with `dev` configs. The config is for ML project development purposes.                                                           | dev workspace        | dev-mlops_stacks_gcp_fs-model     | /dev-mlops_stacks_gcp_fs-experiment     |
-| staging     | The `staging` deployment target is part of the CD pipeline. Latest main content will be deployed to staging workspace with `staging` config.                                                             | staging workspace    | staging-mlops_stacks_gcp_fs-model | /staging-mlops_stacks_gcp_fs-experiment |
-| prod        | The `prod` deployment target is part of the CD pipeline. Latest release content will be deployed to prod workspace with `prod` config.                                                                      | prod workspace       | prod-mlops_stacks_gcp_fs-model    | /prod-mlops_stacks_gcp_fs-experiment    |
-| test        | The `test` deployment target is part of the CI pipeline. For changes targeting the main branch, upon making a PR, an integration test will be triggered and ML assets deployed to the staging workspace defined under `test` deployment target. | staging workspace    | test-mlops_stacks_gcp_fs-model    | /test-mlops_stacks_gcp_fs-experiment    |
+| dev         | The `dev` deployment target is used by ML engineers to deploy ML assets to development workspace with `dev` configs. The config is for ML project development purposes.                                                           | dev workspace        | dev-mlops_stack_taxi_fares-model     | /dev-mlops_stack_taxi_fares-experiment     |
+| staging     | The `staging` deployment target is part of the CD pipeline. Latest main content will be deployed to staging workspace with `staging` config.                                                             | staging workspace    | staging-mlops_stack_taxi_fares-model | /staging-mlops_stack_taxi_fares-experiment |
+| prod        | The `prod` deployment target is part of the CD pipeline. Latest release content will be deployed to prod workspace with `prod` config.                                                                      | prod workspace       | prod-mlops_stack_taxi_fares-model    | /prod-mlops_stack_taxi_fares-experiment    |
+| test        | The `test` deployment target is part of the CI pipeline. For changes targeting the main branch, upon making a PR, an integration test will be triggered and ML assets deployed to the staging workspace defined under `test` deployment target. | staging workspace    | test-mlops_stack_taxi_fares-model    | /test-mlops_stack_taxi_fares-experiment    |
 
 During ML code development, you can deploy local ML asset configurations together with ML code to the a Databricks workspace to run the training, model validation or batch inference pipelines. The deployment will use `dev` config by default.
 
@@ -59,7 +59,7 @@ Upon merging code into the release branch, the release branch content will be de
 To set up the databricks CLI using a Databricks personal access token, take the following steps:
 
 1. Follow [databricks CLI](https://docs.databricks.com/dev-tools/cli/databricks-cli.html) to download and set up the databricks CLI locally.
-2. Complete the `TODO` in `mlops_stacks_gcp_fs/databricks.yml` to add the dev workspace URI under `targets.dev.workspace.host`.
+2. Complete the `TODO` in `mlops_stack_taxi_fares/databricks.yml` to add the dev workspace URI under `targets.dev.workspace.host`.
 3. [Create a personal access token](https://docs.databricks.com/dev-tools/auth.html#personal-access-tokens-for-users)
   in your dev workspace and copy it.
 4. Set an env variable `DATABRICKS_TOKEN` with your Databricks personal access token in your terminal. For example, run `export DATABRICKS_TOKEN=dapi12345` if the access token is dapi12345.
@@ -68,9 +68,9 @@ To set up the databricks CLI using a Databricks personal access token, take the 
 Alternatively, you can use the other approaches described in the [databricks CLI](https://docs.databricks.com/dev-tools/cli/databricks-cli.html) documentation to set up authentication. For example, using your Databricks username/password, or seting up a local profile.
 
 ### Validate and provision ML asset configurations
-1. After installing the databricks CLI and creating the `DATABRICKS_TOKEN` env variable, change to the `mlops_stacks_gcp_fs` directory.
+1. After installing the databricks CLI and creating the `DATABRICKS_TOKEN` env variable, change to the `mlops_stack_taxi_fares` directory.
 2. Run `databricks bundle validate` to validate the Databricks asset configurations. 
-3. Run `databricks bundle deploy` to provision the Databricks asset configurations to the dev workspace. The asset configurations and your ML code will be copied together to the dev workspace. The defined assets such as Databricks Workflows, MLflow Model and MLflow Experiment will be provisioned according to the config files under `mlops_stacks_gcp_fs/assets`.
+3. Run `databricks bundle deploy` to provision the Databricks asset configurations to the dev workspace. The asset configurations and your ML code will be copied together to the dev workspace. The defined assets such as Databricks Workflows, MLflow Model and MLflow Experiment will be provisioned according to the config files under `mlops_stack_taxi_fares/assets`.
 4. Go to the Databricks dev workspace, check the defined model, experiment and workflows status, and interact with the created workflows.
 
 ### Destroy ML asset configurations
@@ -99,7 +99,7 @@ Follow the next section to configure the input and output data tables for the ba
 ### Setting up the batch inference job
 The batch inference job expects an input Delta table with a schema that your registered model accepts. To use the batch
 inference job, set up such a Delta table in both your staging and prod workspaces.
-Following this, update the batch_inference_job base parameters in `mlops_stacks_gcp_fs/assets/batch-inference-workflow-asset.yml` to pass
+Following this, update the batch_inference_job base parameters in `mlops_stack_taxi_fares/assets/batch-inference-workflow-asset.yml` to pass
 the name of the input Delta table and the name of the output Delta table to which to write batch predictions.
 
 As the batch job will be run with the credentials of the service principal that provisioned it, make sure that the service
@@ -125,7 +125,7 @@ resolve the `TODOs` in the ModelValidation task of [model-workflow-asset.yml](./
 ## Develop and test config changes
 
 ### databricks CLI bundles schema overview
-To get started, open `mlops_stacks_gcp_fs/assets/batch-inference-workflow-asset.yml`.  The file contains the ML asset definition of a batch inference job, like:
+To get started, open `mlops_stack_taxi_fares/assets/batch-inference-workflow-asset.yml`.  The file contains the ML asset definition of a batch inference job, like:
 
 ```$xslt
 new_cluster: &new_cluster
@@ -151,12 +151,12 @@ resources:
               ...
 ```
 
-The example above defines a Databricks job with name `${bundle.target}-mlops_stacks_gcp_fs-batch-inference-job`
-that runs the notebook under `mlops_stacks_gcp_fs/deployment/batch_inference/notebooks/BatchInference.py` to regularly apply your ML model for batch inference. 
+The example above defines a Databricks job with name `${bundle.target}-mlops_stack_taxi_fares-batch-inference-job`
+that runs the notebook under `mlops_stack_taxi_fares/deployment/batch_inference/notebooks/BatchInference.py` to regularly apply your ML model for batch inference. 
 
 At the start of the asset definition, we declared an anchor `new_cluster` that will be referenced and used later. For more information about anchors in yaml schema, please refer to the [yaml documentation](https://yaml.org/spec/1.2.2/#3222-anchors-and-aliases).
 
-We specify a `batch_inference_job` under `assets/jobs` to define a databricks workflow with internal key `batch_inference_job` and job name `{bundle.target}-mlops_stacks_gcp_fs-batch-inference-job`.
+We specify a `batch_inference_job` under `assets/jobs` to define a databricks workflow with internal key `batch_inference_job` and job name `{bundle.target}-mlops_stack_taxi_fares-batch-inference-job`.
 The workflow contains a single task with task key `batch_inference_job`. The task runs notebook `../deployment/batch_inference/notebooks/BatchInference.py` with provided parameters `env` and `input_table_name` passing to the notebook.
 After setting up databricks CLI, you can run command `databricks bundle schema`  to learn more about databricks CLI bundles schema.
 
@@ -164,8 +164,8 @@ The notebook_path is the relative path starting from the asset yaml file.
 
 ### Environment config based variables
 The `${bundle.target}` will be replaced by the environment config name during the bundle deployment. For example, during the deployment of a `test` environment config, the job name will be
-`test-mlops_stacks_gcp_fs-batch-inference-job`. During the deployment of the `staging` environment config, the job name will be
-`staging-mlops_stacks_gcp_fs-batch-inference-job`.
+`test-mlops_stack_taxi_fares-batch-inference-job`. During the deployment of the `staging` environment config, the job name will be
+`staging-mlops_stack_taxi_fares-batch-inference-job`.
 
 
 To use different values based on different environment, you can use bundle variables based on the given target, for example,

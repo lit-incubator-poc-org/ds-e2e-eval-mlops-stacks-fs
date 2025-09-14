@@ -21,7 +21,7 @@ input_table_path = dbutils.widgets.get("input_table_path")#####################
 #
 # This notebook can be used to generate and write features to a Databricks Feature Store table.
 # It is configured and can be executed as the tasks in the write_feature_table_job workflow defined under
-# ``mlops_stacks_gcp_fs/assets/feature-engineering-workflow-asset.yml``
+# ``mlops_stack_taxi_fares/assets/feature-engineering-workflow-asset.yml``
 #
 # Parameters:
 #

@@ -1,8 +1,8 @@
-# This GitHub workflow deploys Bundle assets (ML asset config and more)
-# defined under mlops_stacks_gcp_fs/assets/*
-# and mlops_stacks_gcp_fs/databricks.yml with staging deployment target configs,
+# GitHub workflow deploys Bundle assets (ML asset config and more)
+# defined under mlops_stack_taxi_fares/assets/*
+# and mlops_stack_taxi_fares/databricks.yml with staging deployment target configs,
 # when PRs are merged into the default branch
-name: Bundle Deployment for mlops_stacks_gcp_fs Staging
+name: Bundle Deployment for mlops_stack_taxi_fares Staging
 
 on:
   push:
@@ -12,14 +12,14 @@ on:
 
 defaults:
   run:
-    working-directory: ./mlops_stacks_gcp_fs
+    working-directory: ./mlops_stack_taxi_fares
 
 env:
   DATABRICKS_TOKEN: ${{ secrets.STAGING_WORKSPACE_TOKEN }}
 
 jobs:
   staging:
-    concurrency: mlops_stacks_gcp_fs-staging-bundle-job
+    concurrency: mlops_stack_taxi_fares-staging-bundle-job
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
