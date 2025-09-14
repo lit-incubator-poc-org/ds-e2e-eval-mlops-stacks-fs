@@ -452,7 +452,7 @@ The `OnlineTableDeployment.py` notebook automatically:
   "name": "mlops-taxi-fare-endpoint",
   "config": {
     "served_entities": [{
-      "entity_name": "p03.e2e_demo_simon.dev_mlops_stacks_gcp_fs_model",
+      "entity_name": "p03.e2e_demo_simon.dev_mlops_stack_taxi_fares_model",
       "entity_version": "latest",
       "workload_size": "Small",
       "scale_to_zero_enabled": true
@@ -471,7 +471,7 @@ The `OnlineTableDeployment.py` notebook automatically:
 **Error Message:**
 ```
 "Endpoint update failed
-Failed to deploy dev_mlops_stacks_gcp_fs_model-11: Feature lookup setup failed. 
+Failed to deploy dev_mlops_stack_taxi_fares_model-11: Feature lookup setup failed. 
 Please make sure your online feature store is set up correctly."
 ```
 
@@ -678,7 +678,7 @@ try:
     from mlflow.tracking import MlflowClient
     client = MlflowClient()
     
-    model_name = "p03.e2e_demo_simon.dev_mlops_stacks_gcp_fs_model"
+    model_name = "p03.e2e_demo_simon.dev_mlops_stack_taxi_fares_model"
     latest_version = client.get_latest_versions(model_name, stages=["None"])
     if latest_version:
         version_info = latest_version[0]
@@ -1467,13 +1467,13 @@ databricks bundle run model_training_job
 #### **3. Model Registry & Versioning**
 ```bash
 # List registered models
-databricks registered-models list p03.e2e_demo_simon.dev_mlops_stacks_gcp_fs_model
+databricks registered-models list p03.e2e_demo_simon.dev_mlops_stack_taxi_fares_model
 
 # List model versions
-databricks model-versions list p03.e2e_demo_simon.dev_mlops_stacks_gcp_fs_model
+databricks model-versions list p03.e2e_demo_simon.dev_mlops_stack_taxi_fares_model
 
 # View specific model version details
-databricks model-versions get p03.e2e_demo_simon.dev_mlops_stacks_gcp_fs_model 16
+databricks model-versions get p03.e2e_demo_simon.dev_mlops_stack_taxi_fares_model 16
 ```
 
 #### **4. MLflow Experiment Tracking**
