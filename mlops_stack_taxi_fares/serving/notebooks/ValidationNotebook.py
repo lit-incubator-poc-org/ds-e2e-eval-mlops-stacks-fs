@@ -35,7 +35,7 @@ fe = FeatureEngineeringClient()
 w = WorkspaceClient()
 
 # Model information - update these for your deployment
-MODEL_NAME = "p03.e2e_demo_simon.dev_mlops_stacks_gcp_fs_model"
+MODEL_NAME = "p03.e2e_demo_simon.dev_mlops_stack_taxi_fares_model"
 ENDPOINT_NAME = "mlops-taxi-fare-endpoint"
 
 # COMMAND ----------

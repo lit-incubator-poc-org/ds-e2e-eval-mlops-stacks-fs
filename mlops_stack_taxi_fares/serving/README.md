@@ -53,7 +53,7 @@ databricks serving-endpoints query mlops-taxi-fare-endpoint --json @serving/conf
 
 ### **Current Deployment Status**
 - **Endpoint**: `mlops-taxi-fare-endpoint` ✅ READY  
-- **Model**: `p03.e2e_demo_simon.dev_mlops_stacks_gcp_fs_model` version `18` 🆕
+- **Model**: `p03.e2e_demo_simon.dev_mlops_stack_taxi_fares_model` version `18` 🆕
 - **Features**: Unity Catalog online tables with sub-millisecond lookup
 - **Auto-capture**: Enabled for payload logging
 - **Last Updated**: Model version 18 deployed successfully (September 14, 2025)

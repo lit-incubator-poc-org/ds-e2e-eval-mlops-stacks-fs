@@ -1483,7 +1483,7 @@ import mlflow
 from mlflow.tracking import MlflowClient
 
 client = MlflowClient()
-experiment = client.get_experiment_by_name("/Users/{user}/dev_mlops_stacks_gcp_fs_experiment")
+experiment = client.get_experiment_by_name("/Users/{user}/dev_mlops_stack_taxi_fares_experiment")
 runs = client.search_runs(experiment_ids=[experiment.experiment_id])
 
 for run in runs:

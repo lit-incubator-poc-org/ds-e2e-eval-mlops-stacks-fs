@@ -72,7 +72,7 @@ This MLOps pipeline implements a complete machine learning workflow using Azure 
 ## 📁 Directory Structure
 
 ```
-mlops_stacks_gcp_fs/
+mlops_stack_taxi_fares/
 ├── 🤖 AUTOMATION SCRIPTS
 │   └── scripts/
 │       └── run_e2e_mlops_pipeline.sh   # 🚀 Complete end-to-end automation
