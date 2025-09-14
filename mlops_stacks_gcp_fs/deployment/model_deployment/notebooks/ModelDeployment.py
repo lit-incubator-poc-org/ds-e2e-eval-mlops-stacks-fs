@@ -29,6 +29,19 @@ dbutils.widgets.dropdown("env", "None", ["None", "staging", "prod"], "Environmen
 
 # COMMAND ----------
 
+# MAGIC %pip install "protobuf>=5.29.4,<6.0.0" --force-reinstall
+# MAGIC %pip install "databricks-feature-engineering>=0.13.0" --force-reinstall
+
+# COMMAND ----------
+
+# MAGIC %pip uninstall databricks-feature-store -y
+
+# COMMAND ----------
+
+dbutils.library.restartPython()
+
+# COMMAND ----------
+
 import os
 import sys
 notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get())

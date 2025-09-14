@@ -1,5 +1,22 @@
 # Databricks notebook source
-##################################################################################
+################################################## COMMAND ----------
+
+import os
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get())
+%cd $notebook_path
+%cd ../features
+
+
+# COMMAND ----------
+# DBTITLE 1,Define input and output variables
+
+input_table_path = dbutils.widgets.get("input_table_path")#####################
 # Generate and Write Features Notebook
 #
 # This notebook can be used to generate and write features to a Databricks Feature Store table.
@@ -63,6 +80,21 @@ dbutils.widgets.text(
 
 # COMMAND ----------
 
+# COMMAND ----------
+
+# MAGIC %pip install "protobuf>=5.29.4,<6.0.0" --force-reinstall
+# MAGIC %pip install "databricks-feature-engineering>=0.13.0" --force-reinstall
+
+# COMMAND ----------
+
+# MAGIC %pip uninstall databricks-feature-store -y
+
+# COMMAND ----------
+
+dbutils.library.restartPython()
+
+# COMMAND ----------
+
 import os
 notebook_path =  '/Workspace/' + os.path.dirname(dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get())
 %cd $notebook_path
@@ -116,26 +148,30 @@ features_df = compute_features_fn(
 # COMMAND ----------
 # DBTITLE 1, Write computed features.
 
-from databricks import feature_store
+from databricks.feature_engineering import FeatureEngineeringClient
 
-fs = feature_store.FeatureStoreClient()
-
+fe = FeatureEngineeringClient()
 
 # Create the feature table if it does not exist first.
 # Note that this is a no-op if a table with the same name and schema already exists.
-fs.create_table(
-    name=output_table_name,
-    primary_keys=[x.strip() for x in pk_columns.split(",")],
-    timestamp_keys=[ts_column],
-    df=features_df,
-)
+try:
+    fe.create_table(
+        name=output_table_name,
+        primary_keys=[x.strip() for x in pk_columns.split(",")],
+        timestamp_keys=[ts_column],
+        df=features_df,
+        description=f"Feature table for {features_module}",
+    )
+    print(f"Created feature table {output_table_name}")
+except Exception as e:
+    print(f"Feature table {output_table_name} already exists or creation skipped: {e}")
 
 # Write the computed features dataframe.
-fs.write_table(
+fe.write_table(
     name=output_table_name,
     df=features_df,
     mode="merge",
 )
-logger.info(f"Wrote features to table {output_table_name}")
+print(f"Wrote features to table {output_table_name}")
 
 dbutils.notebook.exit(0)

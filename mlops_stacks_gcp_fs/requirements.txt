@@ -4,10 +4,12 @@ pandas>=1.4.3
 scikit-learn>=1.1.1
 matplotlib>=3.5.2
 Jinja2>=3.0.3
-pyspark~=3.3.0
+# pyspark is pre-installed in Databricks runtime, commented out to avoid conflicts
+# pyspark~=3.3.0
 pytz~=2022.2.1
 pyarrow>=14.0.0
 databricks-feature-engineering>=0.13.0
+lightgbm>=3.0.0
 
 # Dev tools
 black>=23.0.0
