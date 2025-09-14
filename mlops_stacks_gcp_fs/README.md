@@ -26,6 +26,8 @@
   - [Step-by-Step Flow](#step-by-step-inference-flow)
 - [🛠️ Development Tools](#️-development-tools)
 - [🚀 Getting Started](#-getting-started)
+  - [🤖 Automated Pipeline](#-automated-end-to-end-pipeline)
+  - [🎯 Manual Deployment](#-manual-step-by-step-deployment)
 
 ## �🚕 Overview
 
@@ -102,25 +104,42 @@ databricks bundle run batch_inference_job
 
 ```
 mlops_stacks_gcp_fs/
-├── feature_engineering/
-│   ├── feature_engineering_utils.py      # Consolidated timestamp utilities
+├── feature_engineering/                # Feature Store & Engineering
 │   ├── features/
-│   │   ├── pickup_features.py           # Pickup location features
-│   │   └── dropoff_features.py          # Dropoff location features
+│   │   ├── pickup_features.py          # Pickup location feature computations
+│   │   └── dropoff_features.py         # Dropoff location feature computations  
 │   └── notebooks/
-│       └── GenerateAndWriteFeatures.py  # Feature store pipeline
-├── training/
-│   ├── training_utils.py                # Model utilities (type-safe)
+│       └── GenerateAndWriteFeatures.py # Feature store pipeline execution
+├── training/                           # Model Training & Experimentation
+│   ├── steps/                          # Training pipeline components
+│   ├── data/                           # Sample data for testing
 │   └── notebooks/
-│       └── TrainWithFeatureStore.py     # Training pipeline
-├── deployment/
-│   ├── model_deployment/                # Model deployment logic
-│   └── batch_inference/                 # Batch prediction pipeline
-├── assets/                             # Databricks Asset Bundle configs
-├── requirements.txt                    # Dependencies + linting tools
-├── pyproject.toml                     # Black configuration  
-├── .pylintrc                          # Pylint configuration
-└── mypy.ini                           # MyPy type checking
+│       └── TrainWithFeatureStore.py    # Model training with feature store integration
+├── serving/                            # 🆕 Model Serving (NEW)
+│   ├── notebooks/
+│   │   ├── OnlineTableDeployment.py    # Complete online table & serving setup
+│   │   └── ValidationNotebook.py       # End-to-end deployment validation
+│   ├── config/
+│   │   ├── serving_endpoint_config.json # Active serving configuration
+│   │   ├── test_*.json                 # Test input configurations
+│   │   └── [legacy configs...]         # Historical configurations
+│   ├── setup_serving.py               # Serving utilities
+│   ├── test_online_tables.py          # Testing utilities  
+│   └── README.md                       # Serving-specific documentation
+├── deployment/                         # Legacy Deployment
+│   ├── model_deployment/               # Traditional model deployment
+│   └── batch_inference/                # Batch prediction pipeline
+├── assets/                             # Databricks Asset Bundle configurations
+│   ├── feature-engineering-workflow-asset.yml
+│   ├── model-workflow-asset.yml
+│   ├── batch-inference-workflow-asset.yml
+│   └── ml-artifacts-asset.yml
+├── databricks.yml                     # 🔧 Main Databricks Asset Bundle config
+├── ml_cluster_config.json            # 🔧 Unity Catalog ML cluster configuration
+├── requirements.txt                   # 🔧 Python dependencies
+├── pyproject.toml                     # 🔧 Code formatting configuration
+├── .pylintrc                          # 🔧 Code quality configuration
+└── mypy.ini                           # 🔧 Type checking configuration
 ```
 
 ## 🔧 Model Details
@@ -374,64 +393,77 @@ pickup_feature_lookups = [
 
 ## 📊 Deployment & Inference
 
-### **1. Model Deployment**
+### **🚀 Quick Start: Deploy Online Feature Store and Model Serving**
 
-#### **🚀 Standard Deployment Process**
-- **Registry**: MLflow Model Registry with Unity Catalog integration
-- **Aliases**: Environment-based aliases (dev, staging, prod)
-- **Versioning**: Automatic model versioning and lineage tracking
+Follow these three simple steps to deploy your model with online feature lookup:
 
-#### **🌟 NEW: Online Feature Store Setup**
-
-The deployment process now automatically enables **Online Feature Store** for real-time inference:
-
-**✅ Enhanced Deployment Features:**
-- **Automatic Online Store Enablement**: Publishes feature tables to online store during deployment
-- **Low-Latency Feature Lookup**: Enables real-time feature retrieval for model serving
-- **Error Prevention**: Prevents "Feature lookup setup failed" errors
-
-**🛠️ Manual Online Feature Store Setup:**
-
-If you need to enable online feature store independently:
-
+#### **Step 1: Deploy Infrastructure and Train Model**
 ```bash
-# Option 1: Run standalone script (requires Databricks environment)
-cd mlops_stacks_gcp_fs/deployment/model_deployment/
-python enable_online_feature_store.py --catalog p03 --schema e2e_demo_simon
+# Deploy MLOps infrastructure
+databricks bundle deploy
 
-# Option 2: Run in Databricks notebook  
-# Navigate to: deployment/model_deployment/notebooks/OnlineFeatureStore.py
-# Right-click -> Run on Databricks
+# Run feature engineering (creates feature tables)
+databricks bundle run write_feature_table_job
 
-# Option 3: AZURE-SPECIFIC FIX - Run the Azure online store fix notebook
-# Navigate to: deployment/model_deployment/notebooks/AzureOnlineStoreFix.py
-# Right-click -> Run on Databricks
-
-# Option 4: Original fix (AWS-based, may not work on Azure)
-# Navigate to: deployment/model_deployment/notebooks/FixOnlineFeatureStore.py
-# Right-click -> Run on Databricks
+# Train and register model
+databricks bundle run model_training_job
 ```
 
-**🚨 AZURE DATABRICKS: "Feature lookup setup failed" Error Fix:**
-
-If you're getting the deployment error on **Azure Databricks**, run this **immediately**:
-
-1. **Open Databricks Workspace**
-2. **Navigate to**: `deployment/model_deployment/notebooks/AzureOnlineStoreFix.py`
-3. **Right-click** → **Run on Databricks**
-4. **Configure Azure online store** (Cosmos DB or Azure SQL)
-5. **Wait for completion** - this will enable Azure online feature store
-6. **Try model serving again**
-
-**🔵 Azure Prerequisites:**
-- Azure Cosmos DB account (Core SQL API) OR Azure SQL Database
-- Databricks secrets configured for authentication
-- Proper networking/firewall configuration
-
-**🧪 Test Online Feature Store:**
+#### **Step 2: Setup Online Tables and Deploy Model**
 ```bash
-# Test online feature lookup (requires Databricks environment)
-python enable_online_feature_store.py --test-only --catalog p03 --schema e2e_demo_simon
+# Option A: Use the comprehensive deployment notebook (RECOMMENDED)
+# Navigate to: deployment/model_deployment/notebooks/OnlineTableDeployment.py
+# Open in Databricks workspace and run all cells
+
+# Option B: Manual deployment via CLI (if notebook fails)
+databricks serving-endpoints create your-endpoint-name --json @serving_config.json
+```
+
+#### **Step 3: Validate Deployment**
+```bash
+# Run validation notebook to test everything
+# Navigate to: deployment/model_deployment/notebooks/ValidationNotebook.py
+# Open in Databricks workspace and run all cells
+
+# Or test via CLI
+databricks serving-endpoints query your-endpoint-name --json @test_input.json
+```
+
+### **📋 Available Notebooks**
+
+The deployment folder contains three focused notebooks:
+
+1. **`OnlineTableDeployment.py`** - Complete online table setup and model serving deployment
+2. **`ModelDeployment.py`** - Standard model deployment (legacy/fallback)
+3. **`ValidationNotebook.py`** - Comprehensive validation of deployment and feature store
+
+### **🔧 Detailed Deployment Process**
+
+#### **Online Table Setup**
+The `OnlineTableDeployment.py` notebook automatically:
+- Creates Unity Catalog online tables from feature tables
+- Configures online feature lookup for sub-millisecond performance
+- Deploys model serving endpoint with automatic feature enrichment
+- Sets up monitoring and auto-capture for request/response logging
+
+#### **Model Serving Configuration**
+```json
+{
+  "name": "mlops-taxi-fare-endpoint",
+  "config": {
+    "served_entities": [{
+      "entity_name": "p03.e2e_demo_simon.dev_mlops_stacks_gcp_fs_model",
+      "entity_version": "latest",
+      "workload_size": "Small",
+      "scale_to_zero_enabled": true
+    }],
+    "auto_capture_config": {
+      "catalog_name": "p03",
+      "schema_name": "e2e_demo_simon",
+      "table_name_prefix": "taxi_fare_endpoint"
+    }
+  }
+}
 ```
 
 #### **🚨 Common Deployment Error: Feature Store Setup Failed**
@@ -1277,9 +1309,286 @@ def add_rounded_timestamps(
 
 ## 🚀 Getting Started
 
-1. **Setup Environment**: `./scripts/setup_environment.sh`
-2. **Deploy Bundle**: `databricks bundle deploy --force-lock`
-3. **Run Training**: `databricks bundle run model_training_job`
-4. **Run Inference**: `databricks bundle run batch_inference_job`
+### **🤖 Automated End-to-End Pipeline**
+
+For the fastest way to run the complete MLOps lifecycle, use our automation scripts:
+
+```bash
+# 🧪 Test all components first (recommended)  
+./test_mlops_components.sh
+
+# 🚀 Run complete end-to-end pipeline (feature engineering → training → serving → testing)
+./run_e2e_mlops_pipeline.sh
+
+# Or run with specific steps skipped:
+./run_e2e_mlops_pipeline.sh --skip-features --skip-training  # Deploy & test only
+./run_e2e_mlops_pipeline.sh --skip-deployment                # Train & features only
+./run_e2e_mlops_pipeline.sh --help                          # View all options
+```
+
+**What the automation does:**
+- ✅ **Feature Engineering**: Create pickup/dropoff features in Unity Catalog Feature Store
+- ✅ **Model Training**: Train model with feature store integration, log to MLflow  
+- ✅ **Model Deployment**: Deploy to serving endpoint with online feature lookup
+- ✅ **Testing**: Validate real-time API and batch inference functionality
+- ✅ **Monitoring**: Enable auto-capture for payload logging and drift detection
+
+📖 **For detailed workflow documentation**, see [README_WORKFLOW.md](README_WORKFLOW.md)
+
+---
+
+### **🎯 Manual Step-by-Step Deployment**
+
+#### **Step 1: Infrastructure Setup & Feature Engineering**
+```bash
+# Deploy MLOps infrastructure and jobs
+databricks bundle deploy --force-lock
+
+# Create and populate feature tables in Unity Catalog Feature Store
+databricks bundle run write_feature_table_job
+```
+
+#### **Step 2: Model Training & Registration**
+```bash
+# Train model with feature store integration and register in Unity Catalog
+databricks bundle run model_training_job
+
+# This will:
+# - Load NYC taxi data from Delta Lake
+# - Apply feature lookups from feature store tables
+# - Train LightGBM regression model
+# - Log model with MLflow and register in Unity Catalog
+# - Set model alias (dev/staging/prod) for deployment
+```
+
+#### **Step 3: Model Serving with Online Feature Store**
+```bash
+# Option A: Complete notebook deployment (RECOMMENDED)
+# 1. Open Databricks workspace
+# 2. Navigate to: serving/notebooks/OnlineTableDeployment.py  
+# 3. Run all cells - this will:
+#    - Create Unity Catalog online tables for sub-millisecond feature lookup
+#    - Deploy serving endpoint with automatic feature enrichment
+#    - Configure auto-capture for request/response monitoring
+#    - Set up scaling and cost optimization
+
+# Option B: CLI deployment with configuration file
+databricks serving-endpoints create --json @serving/config/serving_endpoint_config.json
+```
+
+#### **Step 4: Validation & Testing**
+```bash
+# Comprehensive validation
+# Navigate to: serving/notebooks/ValidationNotebook.py
+# This validates:
+# - Online feature tables accessibility and performance
+# - Model serving endpoint health and responsiveness
+# - End-to-end prediction pipeline with feature lookup
+# - Monitoring and auto-capture functionality
+
+# Quick CLI test
+databricks serving-endpoints query mlops-taxi-fare-endpoint --json @serving/config/test_single_prediction.json
+
+# Batch test
+databricks serving-endpoints query mlops-taxi-fare-endpoint --json @serving/config/test_batch_predictions.json
+```
+
+### **📋 Available Workflows**
+
+#### **Essential Jobs (Keep These)**
+- `write_feature_table_job` - Creates and updates feature store tables
+- `model_training_job` - Trains model with feature store integration
+- `batch_inference_job` - Batch predictions for large datasets
+- `monitoring_workflow` - Model performance monitoring (future)
+
+#### **Essential Notebooks**
+
+**Training & Feature Engineering:**
+- `feature_engineering/notebooks/GenerateAndWriteFeatures.py` - Feature computation and feature store updates
+- `training/notebooks/TrainWithFeatureStore.py` - Model training with feature store integration
+
+**Model Serving:**
+- `serving/notebooks/OnlineTableDeployment.py` - Complete online table and serving setup  
+- `serving/notebooks/ValidationNotebook.py` - End-to-end deployment validation
+- `deployment/model_deployment/notebooks/ModelDeployment.py` - Standard model deployment (legacy)
+
+### **� Configuration Files**
+
+#### **Core Configuration**
+- `databricks.yml` - **Databricks Asset Bundle configuration** (environments, jobs, ML artifacts)
+- `requirements.txt` - **Python dependencies** for MLOps pipeline  
+- `pyproject.toml` - **Black code formatter configuration**
+- `.pylintrc` - **Pylint code quality configuration**  
+- `mypy.ini` - **MyPy type checking configuration**
+
+#### **ML Runtime Configuration**  
+- `ml_cluster_config.json` - **Unity Catalog ML cluster configuration** (Photon, single-user security)
+
+#### **Serving Configuration** (in `/serving/config/`)
+- `serving_endpoint_config.json` - **Active serving endpoint configuration** 
+- `test_single_prediction.json` - **Single prediction test input**
+- `test_batch_predictions.json` - **Batch prediction test inputs**
+
+#### **Legacy Configuration** (in `/serving/config/` - for reference only)  
+- `nytaxifare_endpoint.json` - Old endpoint configuration format
+- `deployment_job.json` - Databricks job configuration for manual deployment
+- `simple_deployment_job.json` - Simplified job configuration
+
+### **�🔧 Key Features Enabled**
+- ✅ **Unity Catalog Online Tables**: Sub-millisecond feature lookups
+- ✅ **Model Serving**: Real-time predictions with automatic feature enrichment
+- ✅ **Auto-scaling**: Scale-to-zero cost optimization
+- ✅ **Monitoring**: Request/response logging and model performance tracking
+- ✅ **Feature Store Integration**: Automatic feature lookup during inference
+
+### **🎯 Model Training & Logging Process**
+
+#### **1. Feature Engineering & Store Population**
+```bash
+# Create feature tables in Unity Catalog Feature Store
+databricks bundle run write_feature_table_job
+
+# This creates two feature tables:
+# - p03.e2e_demo_simon.trip_pickup_features (1-hour aggregation windows)
+# - p03.e2e_demo_simon.trip_dropoff_features (30-minute aggregation windows)
+```
+
+#### **2. Model Training with Feature Store Integration**
+```bash
+# Train model with automatic feature lookup
+databricks bundle run model_training_job
+
+# Training process:
+# 1. Load NYC taxi dataset from Delta Lake (/databricks-datasets/nyctaxi-with-zipcodes/subsampled)
+# 2. Apply feature lookups using FeatureEngineeringClient
+# 3. Train LightGBM regression model on fare_amount target
+# 4. Log model artifacts, metrics, and parameters with MLflow
+# 5. Register model in Unity Catalog Model Registry  
+# 6. Set model alias (dev/staging/prod) for deployment tracking
+```
+
+#### **3. Model Registry & Versioning**
+```bash
+# List registered models
+databricks registered-models list p03.e2e_demo_simon.dev_mlops_stacks_gcp_fs_model
+
+# List model versions
+databricks model-versions list p03.e2e_demo_simon.dev_mlops_stacks_gcp_fs_model
+
+# View specific model version details
+databricks model-versions get p03.e2e_demo_simon.dev_mlops_stacks_gcp_fs_model 16
+```
+
+#### **4. MLflow Experiment Tracking**
+```python
+# View experiment runs programmatically
+import mlflow
+from mlflow.tracking import MlflowClient
+
+client = MlflowClient()
+experiment = client.get_experiment_by_name("/Users/{user}/dev_mlops_stacks_gcp_fs_experiment")
+runs = client.search_runs(experiment_ids=[experiment.experiment_id])
+
+for run in runs:
+    print(f"Run ID: {run.info.run_id}")
+    print(f"Metrics: {run.data.metrics}")
+    print(f"Parameters: {run.data.params}")
+```
+
+### **🚀 Model Serving Deployment**  
+
+#### **1. Online Table Creation**
+```bash
+# Navigate to serving/notebooks/OnlineTableDeployment.py and run to:
+# - Create online tables from feature store tables  
+# - Enable sub-millisecond feature lookup
+# - Configure Unity Catalog online store backend
+```
+
+#### **2. Serving Endpoint Deployment**
+```bash  
+# CLI deployment (after running OnlineTableDeployment.py)
+databricks serving-endpoints create --json @serving/config/serving_endpoint_config.json
+
+# Monitor deployment status
+databricks serving-endpoints get mlops-taxi-fare-endpoint
+```
+
+#### **3. Test Model Serving**
+```bash
+# Single prediction test
+databricks serving-endpoints query mlops-taxi-fare-endpoint --json @serving/config/test_single_prediction.json
+
+# Batch predictions test  
+databricks serving-endpoints query mlops-taxi-fare-endpoint --json @serving/config/test_batch_predictions.json
+
+# Expected response format: {"predictions": [4.97, 11.91, 11.35]}
+```
+
+### **🧪 Validation & Monitoring**
+
+#### **Validate Feature Store**
+```sql
+-- Check feature tables exist
+SHOW TABLES IN p03.e2e_demo_simon LIKE '*features*';
+
+-- Verify online tables (should show FOREIGN type)
+DESCRIBE DETAIL p03.e2e_demo_simon.trip_pickup_online_features;
+DESCRIBE DETAIL p03.e2e_demo_simon.trip_dropoff_online_features;
+```
+
+#### **Monitor Model Performance**
+```sql
+-- View recent predictions and request logs
+SELECT * FROM p03.e2e_demo_simon.taxi_fare_endpoint_payload 
+ORDER BY timestamp DESC LIMIT 10;
+
+-- Analyze prediction patterns  
+SELECT 
+  DATE(timestamp) as prediction_date,
+  COUNT(*) as total_requests,
+  AVG(CAST(JSON_EXTRACT(response, '$.predictions[0]') AS DOUBLE)) as avg_predicted_fare
+FROM p03.e2e_demo_simon.taxi_fare_endpoint_payload
+GROUP BY DATE(timestamp)
+ORDER BY prediction_date DESC;
+```
+
+#### **Feature Store Health Check**
+```sql
+-- Check feature freshness
+SELECT 
+  zip,
+  MAX(tpep_pickup_datetime) as latest_pickup_features,
+  COUNT(*) as feature_count
+FROM p03.e2e_demo_simon.trip_pickup_features 
+GROUP BY zip 
+ORDER BY latest_pickup_features DESC;
+```
+
+### **🚨 Troubleshooting**
+
+#### **"Feature lookup setup failed" Error**
+1. **Run OnlineTableDeployment.py first** - This creates required online tables
+2. **Check Unity Catalog permissions** - Ensure access to feature tables
+3. **Verify model training** - Model must be trained with feature store integration
+
+#### **Serving Endpoint Issues**
+```bash
+# Check endpoint status
+databricks serving-endpoints get mlops-taxi-fare-endpoint
+
+# View endpoint logs in Databricks workspace
+# Navigate to: Serving > mlops-taxi-fare-endpoint > Logs
+```
+
+#### **Permission Errors**
+```sql
+-- Grant required permissions
+GRANT SELECT ON TABLE p03.e2e_demo_simon.trip_pickup_features TO `<your-user>`;
+GRANT SELECT ON TABLE p03.e2e_demo_simon.trip_dropoff_features TO `<your-user>`;
+GRANT USAGE ON SCHEMA p03.e2e_demo_simon TO `<your-user>`;
+```
+
+---
 
 See the [Project overview](../docs/project-overview.md) for additional details on code structure.
