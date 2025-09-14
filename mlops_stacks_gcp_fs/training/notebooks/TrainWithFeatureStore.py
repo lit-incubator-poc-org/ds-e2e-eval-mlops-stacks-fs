@@ -135,7 +135,7 @@ taxi_data.display()
 # COMMAND ----------
 # DBTITLE 1, Create FeatureLookups
 
-from databricks.feature_store import FeatureLookup
+from databricks.feature_engineering import FeatureLookup, FeatureEngineeringClient
 import mlflow
 
 pickup_features_table = dbutils.widgets.get("pickup_features_table")
@@ -165,7 +165,8 @@ dropoff_feature_lookups = [
 # COMMAND ----------
 # DBTITLE 1, Create Training Dataset
 
-from databricks import feature_store
+# Initialize the new Feature Engineering Client for Unity Catalog
+fe = FeatureEngineeringClient()
 
 # End any existing runs (in the case this notebook is being run for a second time)
 mlflow.end_run()
@@ -177,11 +178,10 @@ mlflow.start_run()
 # unless additional feature engineering was performed, exclude them to avoid training on them.
 exclude_columns = ["rounded_pickup_datetime", "rounded_dropoff_datetime"]
 
-fs = feature_store.FeatureStoreClient()
-
 # Create the training set that includes the raw input data merged with corresponding features from both feature tables
-training_set = fs.create_training_set(
-    taxi_data,
+# Using the new FeatureEngineeringClient for Unity Catalog compatibility
+training_set = fe.create_training_set(
+    df=taxi_data,
     feature_lookups=pickup_feature_lookups + dropoff_feature_lookups,
     label="fare_amount",
     exclude_columns=exclude_columns,
@@ -234,8 +234,9 @@ model = lgb.train(param, train_lgb_dataset, num_rounds)
 # DBTITLE 1, Log model and return output.
 
 # Log the trained model with MLflow and package it with feature lookup information.
-fs.log_model(
-    model,
+# CRITICAL: Use FeatureEngineeringClient.log_model for Unity Catalog and online feature store compatibility
+fe.log_model(
+    model=model,
     artifact_path="model_packaged",
     flavor=mlflow.lightgbm,
     training_set=training_set,
