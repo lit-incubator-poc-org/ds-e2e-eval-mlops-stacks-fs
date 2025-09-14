@@ -13,17 +13,50 @@ This is a **MLOps Pipeline** is deployed on Azure Databricks. The project implem
 
 ## Code Generation Guidelines
 
-### ⚠️ CRITICAL FORMATTING RULES ⚠️
-**ABSOLUTELY NO EMOJIS OR UNICODE ICONS IN ANY GENERATED CODE**
-- Do NOT use ANY emojis/icons
-- DO use plain text: "ERROR:", "SUCCESS:", "INFO:", "WARNING:", "TIP:"
-- This applies to ALL code: Python, bash scripts, notebooks, documentation, comments
-- Use descriptive text labels instead of visual symbols
-- Example: Use "ERROR: Connection failed" instead of "❌ Connection failed"
+### ⚠️ CRITICAL CODE REQUIREMENTS ⚠️
+**MANDATORY REQUIREMENTS FOR ALL GENERATED CODE:**
+
+1. **NO EMOJIS OR UNICODE ICONS ANYWHERE**
+   - Do NOT use ANY emojis/icons
+   - DO use plain text: "ERROR:", "SUCCESS:", "INFO:", "WARNING:", "TIP:"
+   - This applies to ALL code: Python, bash scripts, notebooks, documentation, comments
+   - Use descriptive text labels instead of visual symbols
+   - Example: Use "ERROR: Connection failed" instead of "❌ Connection failed"
+
+2. **MANDATORY TYPE HINTS FOR ALL FUNCTIONS**
+   - ALWAYS add type hints to ALL function parameters and return values
+   - Import necessary types: `from typing import Dict, List, Tuple, Optional, Any, Union`
+   - Use specific types when possible, `Any` only when necessary
+   - Example: `def process_data(input_data: List[Dict[str, Any]], batch_size: int = 100) -> Tuple[bool, Optional[str]]:`
+   - This is CRITICAL for code maintainability and is NEVER optional
+   - **FAILURE TO INCLUDE TYPE HINTS WILL RESULT IN CODE REJECTION**
+
+3. **MANDATORY FUNCTION ORGANIZATION**
+   - Public functions MUST be placed at the TOP of the file
+   - Private functions (prefixed with `_`) MUST be placed at the BOTTOM of the file
+   - Private functions MUST be ordered in the sequence they are called
+   - This improves code readability and maintainability
+   - Example organization:
+     ```python
+     # Public functions first
+     def deploy_model(model_uri: str, env: str) -> Dict[str, Any]:
+         pass
+     
+     def create_online_tables(catalog: str, schema: str) -> List[str]:
+         pass
+     
+     # Private functions last, in call order
+     def _parse_model_uri(model_uri: str, client: Any) -> Tuple[str, str]:
+         pass
+     
+     def _create_endpoint_config(name: str, version: str) -> Any:
+         pass
+     ```
 
 ### General Principles
 - Follow PEP 8 Python coding standards
-- Use type hints for all function parameters and return values
+- **MANDATORY: Always use type hints for ALL function parameters and return values** - This is a critical requirement
+- **MANDATORY: Organize functions with public functions first, private functions last in call order**
 - Include comprehensive docstrings for all functions and classes
 - Implement proper error handling with try-catch blocks
 - Use logging instead of print statements for production code
@@ -81,6 +114,27 @@ This is a **MLOps Pipeline** is deployed on Azure Databricks. The project implem
 - Use data validation frameworks like Great Expectations
 - Create model performance tests and benchmarks
 - Implement smoke tests for deployment validation
+
+### Type Hints Best Practices
+**CRITICAL: Type hints are mandatory for all functions**
+- Always import required types: `from typing import Dict, List, Tuple, Optional, Any, Union`
+- Use specific types whenever possible:
+  - `List[str]` instead of `List`
+  - `Dict[str, Any]` for dictionaries with string keys
+  - `Optional[str]` for nullable parameters
+  - `Tuple[str, int]` for fixed-size tuples
+- For Databricks/MLflow objects use `Any` with descriptive docstrings:
+  - `workspace: Any  # Databricks WorkspaceClient`
+  - `client: MlflowClient` (when imported)
+- Always specify return types, use `None` for functions with no return value
+- Example of proper function signature:
+  ```python
+  def process_features(
+      feature_data: List[Dict[str, Any]], 
+      catalog_name: str, 
+      batch_size: Optional[int] = None
+  ) -> Tuple[bool, Optional[str]]:
+  ```
 
 ### Code Comments and Documentation
 - Add inline comments for complex business logic

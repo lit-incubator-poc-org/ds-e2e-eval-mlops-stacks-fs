@@ -1,6 +1,7 @@
 import sys
 import pathlib
 import os
+from typing import Dict, List, Tuple, Optional, Any
 
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent.resolve()))
 from utils import get_deployed_model_alias_for_env
@@ -8,13 +9,18 @@ from mlflow.tracking import MlflowClient
 from databricks.feature_engineering import FeatureEngineeringClient
 
 
-def create_online_tables(catalog_name="p03", schema_name="e2e_demo_simon"):
+# ============================================================================
+# PUBLIC FUNCTIONS (API Interface)
+# ============================================================================
+
+def create_online_tables(catalog_name: str = "p03", schema_name: str = "e2e_demo_simon") -> List[str]:
     """
     Create Databricks Online Tables for feature tables required by the model.
     Uses the modern Online Tables approach following Unity Catalog best practices.
     
     :param catalog_name: Unity Catalog name
     :param schema_name: Schema name containing feature tables
+    :return: List of created online table names
     """
     from databricks.sdk import WorkspaceClient
     from databricks.sdk.service.catalog import OnlineTable, OnlineTableSpec, OnlineTableSpecTriggeredSchedulingPolicy
@@ -94,7 +100,7 @@ def create_online_tables(catalog_name="p03", schema_name="e2e_demo_simon"):
     return online_tables_created
 
 
-def get_latest_model_version(client, model_name):
+def get_latest_model_version(client: MlflowClient, model_name: str) -> str:
     """Get the latest version of the model"""
     try:
         versions = client.search_model_versions(f"name='{model_name}'")
@@ -108,31 +114,85 @@ def get_latest_model_version(client, model_name):
         return "1"  # Fallback to version 1
 
 
-def deploy_with_online_tables(model_uri, env):
+def deploy_with_online_tables(model_uri: str, env: str) -> Dict[str, Any]:
     """
     Deploy the model to Unity Catalog registry with Online Tables for real-time inference.
     Creates serving endpoint with automatic feature lookup capabilities.
     
     :param model_uri: URI of the model in format "models://<name>/<version>" or just "<name>"
     :param env: Environment (dev, staging, prod)
+    :return: Deployment summary dictionary
     """
     from databricks.sdk import WorkspaceClient
-    from databricks.sdk.service.serving import (
-        EndpointCoreConfigInput, 
-        ServedEntityInput, 
-        AutoCaptureConfigInput, 
-        ServedModelInputWorkloadType
-    )
     
-    # Initialize WorkspaceClient using Databricks CLI configuration
+    # Initialize clients
     workspace = WorkspaceClient()
     
-    # Initialize MLflow client with Databricks configuration
     import mlflow
     mlflow.set_tracking_uri("databricks")
     client = MlflowClient()
     
-    # Parse model URI to extract model name and version
+    # Parse model URI and extract components
+    model_name, model_version = _parse_model_uri(model_uri, client)
+    catalog_name, schema_name = _extract_catalog_schema(model_name)
+    
+    print(f"INFO: Deploying model: {model_name} (version {model_version})")
+    print(f"INFO: Environment: {env}")
+    
+    # Step 1: Create online tables for feature serving
+    print("\nStep 1: Setting up Online Tables...")
+    online_tables = create_online_tables(catalog_name, schema_name)
+    
+    # Step 2: Set model alias for deployment tracking
+    alias = _set_model_alias(client, model_name, model_version, env)
+    
+    # Step 3: Create/Update serving endpoint
+    endpoint_name = "nytaxifares"
+    endpoint_config = _create_endpoint_config(model_name, model_version, catalog_name, schema_name)
+    _create_or_update_endpoint(workspace, endpoint_name, endpoint_config, model_version, env)
+    
+    # Step 4: Verify endpoint status
+    _verify_endpoint_status(workspace, endpoint_name)
+    
+    # Step 5: Wait for endpoint to be fully ready
+    _wait_for_endpoint_ready(workspace, endpoint_name)
+    
+    # Print deployment summary
+    _print_deployment_summary(workspace, model_name, model_version, env, alias, endpoint_name, online_tables)
+    
+    return {
+        "model_name": model_name,
+        "model_version": model_version,
+        "endpoint_name": endpoint_name,
+        "online_tables": online_tables,
+        "alias": alias
+    }
+
+
+def deploy(model_uri: str, env: str) -> Dict[str, Any]:
+    """
+    Legacy deploy function - now redirects to new online tables deployment.
+    Maintained for backward compatibility.
+    
+    :param model_uri: URI of the model in format "models://<name>/<version>" or just "<name>"
+    :param env: Environment (dev, staging, prod)
+    :return: Deployment summary dictionary
+    """
+    return deploy_with_online_tables(model_uri, env)
+
+
+# ============================================================================
+# PRIVATE UTILITY FUNCTIONS (Implementation Details - in call order)
+# ============================================================================
+
+def _parse_model_uri(model_uri: str, client: MlflowClient) -> Tuple[str, str]:
+    """
+    Parse model URI and return model name and version.
+    
+    :param model_uri: URI of the model in format "models://<name>/<version>" or just "<name>"
+    :param client: MLflow client for version lookup
+    :return: tuple of (model_name, model_version)
+    """
     if model_uri.startswith("models:/"):
         # Format: "models://<name>/<version>"
         uri_parts = model_uri.replace("models:/", "").split("/")
@@ -143,13 +203,16 @@ def deploy_with_online_tables(model_uri, env):
         model_name = model_uri
         model_version = get_latest_model_version(client, model_name)
     
-    print(f"INFO: Deploying model: {model_name} (version {model_version})")
-    print(f"INFO: Environment: {env}")
+    return model_name, model_version
+
+
+def _extract_catalog_schema(model_name: str) -> Tuple[str, str]:
+    """
+    Extract catalog and schema names from model name.
     
-    # Step 1: Create online tables for feature serving
-    print("\nStep 1: Setting up Online Tables...")
-    
-    # Extract catalog and schema from model name for online tables
+    :param model_name: Full model name like "catalog.schema.model_name"
+    :return: tuple of (catalog_name, schema_name)
+    """
     model_parts = model_name.split(".")
     if len(model_parts) >= 2:
         catalog_name = model_parts[0]
@@ -159,9 +222,19 @@ def deploy_with_online_tables(model_uri, env):
         catalog_name = "p03"
         schema_name = "e2e_demo_simon"
     
-    online_tables = create_online_tables(catalog_name, schema_name)
+    return catalog_name, schema_name
+
+
+def _set_model_alias(client: MlflowClient, model_name: str, model_version: str, env: str) -> str:
+    """
+    Set model alias for deployment tracking.
     
-    # Step 2: Set model alias for deployment tracking
+    :param client: MLflow client
+    :param model_name: Model name
+    :param model_version: Model version
+    :param env: Environment (dev, staging, prod)
+    :return: alias name that was set
+    """
     print("\nStep 2: Setting model alias for deployment...")
     alias = get_deployed_model_alias_for_env(env)
     
@@ -173,14 +246,27 @@ def deploy_with_online_tables(model_uri, env):
     )
     print(f"SUCCESS: Model alias '{alias}' set successfully")
     
-    # Step 3: Create/Update serving endpoint with proper configuration
-    print("\nStep 3: Creating/Updating serving endpoint...")
+    return alias
+
+
+def _create_endpoint_config(model_name: str, model_version: str, catalog_name: str, schema_name: str) -> Any:
+    """
+    Create endpoint configuration for serving.
     
-    # Use the configured endpoint name (nytaxifares)
-    endpoint_name = "nytaxifares"
+    :param model_name: Model name
+    :param model_version: Model version
+    :param catalog_name: Unity Catalog name
+    :param schema_name: Schema name
+    :return: EndpointCoreConfigInput object
+    """
+    from databricks.sdk.service.serving import (
+        EndpointCoreConfigInput, 
+        ServedEntityInput, 
+        AutoCaptureConfigInput, 
+        ServedModelInputWorkloadType
+    )
     
-    # Enhanced endpoint configuration with auto-capture and tags  
-    endpoint_config = EndpointCoreConfigInput(
+    return EndpointCoreConfigInput(
         served_entities=[
             ServedEntityInput(
                 entity_name=model_name,
@@ -196,6 +282,19 @@ def deploy_with_online_tables(model_uri, env):
             table_name_prefix="nytaxifares_endpoint"
         )
     )
+
+
+def _create_or_update_endpoint(workspace: Any, endpoint_name: str, endpoint_config: Any, model_version: str, env: str) -> None:
+    """
+    Create or update serving endpoint.
+    
+    :param workspace: Databricks WorkspaceClient
+    :param endpoint_name: Name of the endpoint
+    :param endpoint_config: Endpoint configuration
+    :param model_version: Model version for tagging
+    :param env: Environment for tagging
+    """
+    print("\nStep 3: Creating/Updating serving endpoint...")
     
     try:
         # Check if endpoint already exists
@@ -224,7 +323,7 @@ def deploy_with_online_tables(model_uri, env):
             endpoint_tags = [
                 {"key": "environment", "value": env},
                 {"key": "project", "value": "mlops-taxi-fare"},
-                {"key": "model_name", "value": model_name.split(".")[-1]},
+                {"key": "model_name", "value": endpoint_config.served_entities[0].entity_name.split(".")[-1]},
                 {"key": "model_version", "value": model_version}
             ]
             
@@ -240,8 +339,15 @@ def deploy_with_online_tables(model_uri, env):
     except Exception as e:
         print(f"ERROR: Failed to create/update endpoint: {str(e)}")
         raise e
-        
-    # Step 4: Verify endpoint is ready and serving
+
+
+def _verify_endpoint_status(workspace: Any, endpoint_name: str) -> None:
+    """
+    Verify endpoint status and readiness.
+    
+    :param workspace: Databricks WorkspaceClient
+    :param endpoint_name: Name of the endpoint
+    """
     print("\nStep 4: Verifying endpoint status...")
     try:
         final_endpoint = workspace.serving_endpoints.get(endpoint_name)
@@ -258,11 +364,18 @@ def deploy_with_online_tables(model_uri, env):
             
     except Exception as e:
         print(f"WARNING: Could not verify endpoint status: {str(e)}")
-        
-    # Step 5: Wait for endpoint to be fully ready (with timeout)
+
+
+def _wait_for_endpoint_ready(workspace: Any, endpoint_name: str, max_wait_time: int = 300) -> None:
+    """
+    Wait for endpoint to be fully ready with timeout.
+    
+    :param workspace: Databricks WorkspaceClient
+    :param endpoint_name: Name of the endpoint
+    :param max_wait_time: Maximum wait time in seconds (default: 5 minutes)
+    """
     print("\nStep 5: Waiting for endpoint to be fully ready...")
     import time
-    max_wait_time = 300  # 5 minutes
     start_time = time.time()
     
     while time.time() - start_time < max_wait_time:
@@ -282,8 +395,20 @@ def deploy_with_online_tables(model_uri, env):
             time.sleep(30)
     else:
         print("WARNING: Endpoint may still be initializing after 5 minutes. Check Databricks UI for status.")
+
+
+def _print_deployment_summary(workspace: Any, model_name: str, model_version: str, env: str, alias: str, endpoint_name: str, online_tables: List[str]) -> None:
+    """
+    Print deployment success summary.
     
-    # Success summary
+    :param workspace: Databricks WorkspaceClient
+    :param model_name: Model name
+    :param model_version: Model version
+    :param env: Environment
+    :param alias: Model alias
+    :param endpoint_name: Endpoint name
+    :param online_tables: List of online tables created
+    """
     print("\n" + "="*60)
     print("SUCCESS: DEPLOYMENT SUCCESSFUL")
     print("="*60)
@@ -298,25 +423,6 @@ def deploy_with_online_tables(model_uri, env):
     
     print(f"\nINFO: Endpoint URL: https://{workspace.config.host}/ml/endpoints/{endpoint_name}")
     print("TIP: Model is ready for real-time inference with automatic feature lookup!")
-    
-    return {
-        "model_name": model_name,
-        "model_version": model_version,
-        "endpoint_name": endpoint_name,
-        "online_tables": online_tables,
-        "alias": alias
-    }
-
-
-def deploy(model_uri, env):
-    """
-    Legacy deploy function - now redirects to new online tables deployment.
-    Maintained for backward compatibility.
-    
-    :param model_uri: URI of the model in format "models://<name>/<version>" or just "<name>"
-    :param env: Environment (dev, staging, prod)
-    """
-    return deploy_with_online_tables(model_uri, env)
 
 
 if __name__ == "__main__":
