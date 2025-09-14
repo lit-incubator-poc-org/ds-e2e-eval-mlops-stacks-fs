@@ -30,12 +30,54 @@ This MLOps pipeline implements a complete machine learning workflow using Azure 
 - **Delta Lake** for data storage
 - **Apache Spark** for data processing
 
+## Automation Scripts
+
+**Location**: `scripts/run_e2e_mlops_pipeline.sh`
+
+**Usage Examples**:
+```bash
+# Quick Start
+
+## Option 1: From Project Root Directory
+
+```bash
+# Full pipeline (recommended for first run)
+./scripts/run_e2e_mlops_pipeline.sh
+
+# Skip feature engineering (if features already exist)
+./scripts/run_e2e_mlops_pipeline.sh --skip-features
+
+# Force feature refresh
+./scripts/run_e2e_mlops_pipeline.sh --force-features
+```
+
+## Option 2: Using Convenience Launcher (from anywhere)
+
+```bash
+# Can be run from any directory within the project
+./run_mlops.sh
+
+# With options
+./run_mlops.sh --skip-features
+./run_mlops.sh --force-features
+```
+```
+
+**Key Features**:
+- ✅ Uses existing configuration files from `serving/config/`
+- ✅ Dynamic model version detection from training output
+- ✅ Automatic directory navigation (works from project root or scripts folder)
+- ✅ Comprehensive error handling and status reporting
+
 ## 📁 Directory Structure
 
 ```
 mlops_stacks_gcp_fs/
-├── 🔧 AUTOMATION & CONFIGURATION
-│   ├── run_e2e_mlops_pipeline.sh       # 🚀 End-to-end automation script
+├── 🤖 AUTOMATION SCRIPTS
+│   └── scripts/
+│       └── run_e2e_mlops_pipeline.sh   # 🚀 Complete end-to-end automation
+│
+├── 🔧 CONFIGURATION
 │   ├── databricks.yml                  # 🔧 Main Databricks Asset Bundle config
 │   ├── README_WORKFLOW.md              # 📖 This workflow documentation
 │   ├── requirements.txt                # 📦 Python dependencies

@@ -4,7 +4,7 @@
     "served_entities": [
       {
         "entity_name": "p03.e2e_demo_simon.dev_mlops_stacks_gcp_fs_model",
-        "entity_version": "18",
+        "entity_version": "20",
         "workload_size": "Small",
         "scale_to_zero_enabled": true,
         "workload_type": "CPU"
@@ -22,7 +22,7 @@
       "value": "dev"
     },
     {
-      "key": "project", 
+      "key": "project",
       "value": "mlops-taxi-fare"
     }
   ]

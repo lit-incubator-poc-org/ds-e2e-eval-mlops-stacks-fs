@@ -104,6 +104,8 @@ databricks bundle run batch_inference_job
 
 ```
 mlops_stacks_gcp_fs/
+├── scripts/                            # 🤖 Automation Scripts
+│   └── run_e2e_mlops_pipeline.sh       # Complete end-to-end automation
 ├── feature_engineering/                # Feature Store & Engineering
 │   ├── features/
 │   │   ├── pickup_features.py          # Pickup location feature computations
@@ -115,16 +117,14 @@ mlops_stacks_gcp_fs/
 │   ├── data/                           # Sample data for testing
 │   └── notebooks/
 │       └── TrainWithFeatureStore.py    # Model training with feature store integration
-├── serving/                            # 🆕 Model Serving (NEW)
+├── serving/                            # 🚀 Model Serving
 │   ├── notebooks/
 │   │   ├── OnlineTableDeployment.py    # Complete online table & serving setup
 │   │   └── ValidationNotebook.py       # End-to-end deployment validation
 │   ├── config/
 │   │   ├── serving_endpoint_config.json # Active serving configuration
-│   │   ├── test_*.json                 # Test input configurations
-│   │   └── [legacy configs...]         # Historical configurations
-│   ├── setup_serving.py               # Serving utilities
-│   ├── test_online_tables.py          # Testing utilities  
+│   │   ├── test_single_prediction.json # Single prediction test input
+│   │   └── test_batch_predictions.json # Batch prediction test inputs
 │   └── README.md                       # Serving-specific documentation
 ├── deployment/                         # Legacy Deployment
 │   ├── model_deployment/               # Traditional model deployment
@@ -1311,19 +1311,16 @@ def add_rounded_timestamps(
 
 ### **🤖 Automated End-to-End Pipeline**
 
-For the fastest way to run the complete MLOps lifecycle, use our automation scripts:
+For the fastest way to run the complete MLOps lifecycle, use our automation script:
 
 ```bash
-# 🧪 Test all components first (recommended)  
-./test_mlops_components.sh
-
 # 🚀 Run complete end-to-end pipeline (feature engineering → training → serving → testing)
-./run_e2e_mlops_pipeline.sh
+./scripts/run_e2e_mlops_pipeline.sh
 
 # Or run with specific steps skipped:
-./run_e2e_mlops_pipeline.sh --skip-features --skip-training  # Deploy & test only
-./run_e2e_mlops_pipeline.sh --skip-deployment                # Train & features only
-./run_e2e_mlops_pipeline.sh --help                          # View all options
+./scripts/run_e2e_mlops_pipeline.sh --skip-features --skip-training  # Deploy & test only
+./scripts/run_e2e_mlops_pipeline.sh --skip-deployment                # Train & features only
+./scripts/run_e2e_mlops_pipeline.sh --help                          # View all options
 ```
 
 **What the automation does:**

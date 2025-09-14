@@ -104,9 +104,14 @@ check_prerequisites() {
         error "Databricks CLI not authenticated. Run: databricks auth login"
     fi
     
-    # Check if we're in the right directory
+    # Check if we're in the right directory and navigate if needed
     if [[ ! -f "databricks.yml" ]]; then
-        error "databricks.yml not found. Please run from the mlops_stacks_gcp_fs directory"
+        if [[ -f "../databricks.yml" ]]; then
+            log "Changing to parent directory..."
+            cd ..
+        else
+            error "databricks.yml not found. Please run from the mlops_stacks_gcp_fs directory or scripts subdirectory"
+        fi
     fi
     
     success "Prerequisites check passed"
@@ -134,7 +139,7 @@ run_feature_engineering() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
     log "Running feature engineering workflow..."
-    if databricks bundle run feature_engineering_job --target dev; then
+    if databricks bundle run write_feature_table_job --target dev; then
         success "Feature engineering completed successfully"
     else
         error "Feature engineering pipeline failed"
@@ -192,60 +197,43 @@ deploy_model_serving() {
     # Get the latest model version
     if [[ -f "/tmp/latest_model_version.txt" ]]; then
         LATEST_VERSION=$(cat /tmp/latest_model_version.txt)
-        log "Using model version: $LATEST_VERSION"
+        log "Using newly trained model version: $LATEST_VERSION"
     else
-        warning "No model version found from training, checking existing endpoint..."
-        LATEST_VERSION="latest"
+        # Get current version from existing endpoint or use latest
+        log "Getting current model version from endpoint..."
+        CURRENT_VERSION=$(databricks serving-endpoints get "$ENDPOINT_NAME" --output json 2>/dev/null | jq -r '.config.served_entities[0].entity_version // "latest"')
+        LATEST_VERSION="${CURRENT_VERSION}"
+        warning "Using existing model version: $LATEST_VERSION"
     fi
     
-    # Update serving endpoint configuration
-    log "Creating serving endpoint configuration..."
-    cat > /tmp/serving_config.json << EOF
-{
-  "served_entities": [
-    {
-      "entity_name": "${MODEL_NAME}",
-      "entity_version": "${LATEST_VERSION}",
-      "workload_size": "Small",
-      "scale_to_zero_enabled": true,
-      "workload_type": "CPU"
-    }
-  ],
-  "auto_capture_config": {
-    "catalog_name": "${CATALOG}",
-    "schema_name": "${SCHEMA}",
-    "table_name_prefix": "taxi_fare_endpoint"
-  },
-  "traffic_config": {
-    "routes": [
-      {
-        "served_entity_name": "dev_${PROJECT_NAME}_model-${LATEST_VERSION}",
-        "traffic_percentage": 100
-      }
-    ]
-  }
-}
-EOF
+    # Use existing config file as template and update the version
+    log "Updating serving endpoint configuration with version $LATEST_VERSION..."
+    
+    # Create updated config for endpoint update (without name and tags)
+    jq --arg version "$LATEST_VERSION" --arg model_name "$MODEL_NAME" '
+    .config.served_entities[0].entity_version = $version |
+    .config.served_entities[0].entity_name = $model_name |
+    .config
+    ' serving/config/serving_endpoint_config.json > /tmp/serving_update_config.json
     
     # Check if endpoint exists, create or update accordingly
     log "Checking if serving endpoint exists..."
     if databricks serving-endpoints get "$ENDPOINT_NAME" &> /dev/null; then
-        log "Updating existing serving endpoint..."
-        if databricks serving-endpoints update-config "$ENDPOINT_NAME" --json @/tmp/serving_config.json; then
-            success "Serving endpoint updated successfully"
+        log "Updating existing serving endpoint to version $LATEST_VERSION..."
+        if databricks serving-endpoints update-config "$ENDPOINT_NAME" --json @/tmp/serving_update_config.json; then
+            success "Serving endpoint updated to version $LATEST_VERSION"
         else
             error "Failed to update serving endpoint"
         fi
     else
         log "Creating new serving endpoint..."
-        # Add endpoint name to config for creation
-        cat > /tmp/create_serving_config.json << EOF
-{
-  "name": "${ENDPOINT_NAME}",
-  "config": $(cat /tmp/serving_config.json)
-}
-EOF
-        if databricks serving-endpoints create --json @/tmp/create_serving_config.json; then
+        # Use the full config file for creation and update the version
+        jq --arg version "$LATEST_VERSION" --arg model_name "$MODEL_NAME" '
+        .config.served_entities[0].entity_version = $version |
+        .config.served_entities[0].entity_name = $model_name
+        ' serving/config/serving_endpoint_config.json > /tmp/serving_create_config.json
+        
+        if databricks serving-endpoints create --json @/tmp/serving_create_config.json; then
             success "Serving endpoint created successfully"
         else
             error "Failed to create serving endpoint"
@@ -264,8 +252,16 @@ EOF
         sleep 10
     done
     
+    # Update the config file with the new version for future reference
+    log "Updating config file with deployed version..."
+    jq --arg version "$LATEST_VERSION" --arg model_name "$MODEL_NAME" '
+    .config.served_entities[0].entity_version = $version |
+    .config.served_entities[0].entity_name = $model_name
+    ' serving/config/serving_endpoint_config.json > /tmp/updated_serving_config.json
+    mv /tmp/updated_serving_config.json serving/config/serving_endpoint_config.json
+    
     # Clean up temporary files
-    rm -f /tmp/serving_config.json /tmp/create_serving_config.json
+    rm -f /tmp/serving_update_config.json /tmp/serving_create_config.json
 }
 
 # Step 4: Testing (Real-time and Batch)
@@ -280,6 +276,10 @@ run_testing() {
     
     # Test 1: Real-time single prediction
     log "Testing real-time single prediction..."
+    if [[ ! -f "serving/config/test_single_prediction.json" ]]; then
+        error "Test configuration file not found: serving/config/test_single_prediction.json"
+    fi
+    
     SINGLE_RESULT=$(databricks serving-endpoints query "$ENDPOINT_NAME" --json @serving/config/test_single_prediction.json 2>/dev/null)
     if [[ $? -eq 0 ]]; then
         PREDICTION=$(echo "$SINGLE_RESULT" | jq -r '.predictions[0]')
@@ -290,6 +290,10 @@ run_testing() {
     
     # Test 2: Real-time batch predictions  
     log "Testing real-time batch predictions..."
+    if [[ ! -f "serving/config/test_batch_predictions.json" ]]; then
+        error "Test configuration file not found: serving/config/test_batch_predictions.json"  
+    fi
+    
     BATCH_RESULT=$(databricks serving-endpoints query "$ENDPOINT_NAME" --json @serving/config/test_batch_predictions.json 2>/dev/null)
     if [[ $? -eq 0 ]]; then
         PREDICTIONS=$(echo "$BATCH_RESULT" | jq -r '.predictions | @csv')
