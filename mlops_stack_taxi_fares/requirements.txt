@@ -7,7 +7,7 @@ Jinja2>=3.0.3
 # pyspark is pre-installed in Databricks runtime, commented out to avoid conflicts
 # pyspark~=3.3.0
 pytz~=2022.2.1
-pyarrow>=14.0.0
+pyarrow>=16.0.0
 databricks-feature-engineering>=0.13.0
 lightgbm>=3.0.0
 

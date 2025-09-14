@@ -13,7 +13,7 @@
     "auto_capture_config": {
       "catalog_name": "p03",
       "schema_name": "e2e_demo_simon",
-      "table_name_prefix": "taxi_fare_endpoint"
+      "table_name_prefix": "nytaxifares_endpoint"
     }
   },
   "tags": [
