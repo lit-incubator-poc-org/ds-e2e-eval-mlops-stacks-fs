@@ -80,6 +80,134 @@ The feature engineering system in this MLOps pipeline is built on **Databricks U
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### 🔄 Feature Store Client Sequence Flow
+
+The following sequence diagram illustrates how the Databricks Feature Engineering Client orchestrates feature operations during training and inference:
+
+```mermaid
+sequenceDiagram
+    participant TE as Training Engineer
+    participant FS as Feature Store Client
+    participant UC as Unity Catalog
+    participant OT as Online Tables
+    participant ML as MLflow Registry
+    participant SE as Serving Endpoint
+    participant API as API Client
+
+    Note over TE, API: TRAINING TIME FLOW
+    
+    TE->>FS: 1. Create FeatureLookup specs
+    Note right of TE: pickup_feature_lookups<br/>+ dropoff_feature_lookups
+    
+    TE->>FS: 2. fe.create_training_set(df, feature_lookups, label)
+    FS->>UC: 3. Query feature tables with point-in-time joins
+    Note right of UC: trip_pickup_features<br/>+ trip_dropoff_features
+    UC-->>FS: 4. Return joined training data
+    FS-->>TE: 5. Training set with features
+    
+    TE->>TE: 6. Train model (LightGBM)
+    Note right of TE: model = lgb.train(training_df)
+    
+    TE->>FS: 7. fe.log_model(model, training_set, model_name)
+    FS->>ML: 8. Store model + feature metadata
+    Note right of ML: Model artifacts +<br/>FeatureLookup specs +<br/>Training set config
+    ML-->>FS: 9. Model URI
+    FS-->>TE: 10. Registered model ready
+
+    Note over TE, API: DEPLOYMENT TIME FLOW
+    
+    TE->>FS: 11. create_online_tables()
+    FS->>UC: 12. Create OnlineTableSpec
+    UC->>OT: 13. Sync feature tables → online tables
+    Note right of OT: trip_pickup_features_online<br/>+ trip_dropoff_features_online
+    OT-->>UC: 14. Online tables ready
+    UC-->>FS: 15. Online table status
+    
+    TE->>SE: 16. Deploy serving endpoint with model_uri
+    SE->>ML: 17. Load model + embedded feature specs
+    ML-->>SE: 18. Model + FeatureLookup metadata
+    SE-->>TE: 19. Serving endpoint ready
+
+    Note over TE, API: INFERENCE TIME FLOW
+    
+    API->>SE: 20. POST /predict with raw data
+    Note right of API: {"pickup_zip": "10001",<br/>"dropoff_zip": "10002",<br/>"pickup_datetime": "...",<br/>"trip_distance": 2.5}
+    
+    SE->>SE: 21. Apply embedded preprocessing
+    Note right of SE: Round timestamps using<br/>training_set metadata:<br/>pickup: 15min, dropoff: 30min
+    
+    par Parallel Feature Lookup
+        SE->>OT: 22a. Lookup pickup features
+        Note right of SE: Query: pickup_zip + rounded_pickup_datetime
+        OT-->>SE: 23a. Pickup feature values
+        Note left of OT: mean_fare_window_1h_pickup_zip<br/>count_trips_window_1h_pickup_zip
+    and
+        SE->>OT: 22b. Lookup dropoff features  
+        Note right of SE: Query: dropoff_zip + rounded_dropoff_datetime
+        OT-->>SE: 23b. Dropoff feature values
+        Note left of OT: count_trips_window_30m_dropoff_zip<br/>dropoff_is_weekend
+    end
+    
+    SE->>SE: 24. Assemble feature vector
+    Note right of SE: Combine raw input +<br/>retrieved features in<br/>training order
+    
+    SE->>SE: 25. Model.predict(feature_vector)
+    Note right of SE: LightGBM inference
+    
+    SE-->>API: 26. Return prediction
+    Note left of SE: {"predictions": [14.75]}
+
+    Note over TE, API: FEATURE CONSISTENCY GUARANTEES
+    
+    rect rgb(240, 248, 255)
+        Note over FS, ML: Training Set Metadata Embedding
+        FS->>ML: ✓ FeatureLookup specifications
+        FS->>ML: ✓ Preprocessing requirements (timestamp rounding)
+        FS->>ML: ✓ Feature table schema & online table mapping
+        FS->>ML: ✓ Feature ordering & data types
+    end
+    
+    rect rgb(240, 255, 240)
+        Note over SE, OT: Automatic Inference Pipeline
+        SE->>SE: ✓ Same preprocessing logic as training
+        SE->>OT: ✓ Same feature lookup specifications
+        SE->>SE: ✓ Same feature vector assembly order
+        SE->>SE: ✓ Built-in fallbacks for missing features
+    end
+
+    rect rgb(255, 248, 240)
+        Note over UC, OT: Real-time Feature Serving
+        UC->>OT: ✓ Sub-millisecond feature lookup
+        UC->>OT: ✓ Automatic sync from offline tables
+        UC->>OT: ✓ Change Data Feed for incremental updates
+        UC->>OT: ✓ High availability with failover
+    end
+```
+
+### 🔍 Key Sequence Flow Insights
+
+#### **Training Time (Steps 1-10)**
+- **Feature Store Client** automatically handles point-in-time joins with feature tables
+- **Training set creation** embeds all feature engineering specifications as metadata
+- **Model logging** packages both the trained model AND the feature pipeline specifications
+
+#### **Deployment Time (Steps 11-19)**  
+- **Online tables** are created from offline feature tables for real-time serving
+- **Serving endpoint** loads model with embedded feature specifications
+- **No additional configuration** needed - everything is stored in model metadata
+
+#### **Inference Time (Steps 20-26)**
+- **Automatic preprocessing** uses the exact same logic from training (timestamp rounding)
+- **Parallel feature lookup** queries multiple online tables concurrently for optimal latency
+- **Feature vector assembly** maintains the same order and structure as training data
+
+#### **Consistency Guarantees**
+- **Zero-code consistency**: Same preprocessing and feature lookup logic automatically
+- **Metadata-driven pipeline**: All specifications stored with model, not in separate configs
+- **Real-time feature serving**: Sub-millisecond lookup with automatic synchronization
+
+This sequence flow ensures **perfect training-serving consistency** while providing **high-performance real-time inference** with **zero manual configuration** at serving time.
+
 ## 🔬 Feature Development & Computation
 
 ### Feature Modules Structure
