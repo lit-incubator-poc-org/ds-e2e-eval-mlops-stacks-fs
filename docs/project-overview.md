@@ -24,9 +24,9 @@ This project contains the following components:
 contained in the following files:
 
 ```
-mlops_stacks_gcp_fs        <- Root directory. Both monorepo and polyrepo are supported.
+mlops_stack_taxi_fares        <- Root directory. Both monorepo and polyrepo are supported.
 │
-├── mlops_stacks_gcp_fs       <- Contains python code, notebooks and ML assets related to one ML project. 
+├── mlops_stack_taxi_fares       <- Contains python code, notebooks and ML assets related to one ML project. 
 │   │
 │   ├── requirements.txt        <- Specifies Python dependencies for ML code (for example: model training, batch inference).
 │   │

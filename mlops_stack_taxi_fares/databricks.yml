@@ -1,0 +1,41 @@
+# The name of the bundle. run `databricks bundle schema` to see the full bundle settings schema.
+bundle:
+  name: mlops_stack_taxi_fares
+
+variables:
+  experiment_name:
+    description: Experiment name for the model training.
+    default: /Users/${workspace.current_user.userName}/${bundle.target}-mlops_stack_taxi_fares-experiment-v2
+  schema_name:
+    description: The schema to use for feature tables, models etc.
+    default: p03.e2e_demo_simon
+  model_name:
+    description: Model name for the model training.
+    default: ${var.schema_name}.${bundle.target}_mlops_stack_taxi_fares_model
+
+include:
+  # Assets folder contains ML artifact assets for the ml project that defines model and experiment
+  # And workflows assets for the ml project including model training -> validation -> deployment,
+  # feature engineering,  batch inference, data monitoring, metric refresh, alerts and triggering retraining
+  - ./assets/*.yml
+
+# Deployment Target specific values for workspace
+targets:
+  dev:
+    default: true
+    workspace:
+      # TODO: add dev workspace URL
+      host: https://adb-8490988242777396.16.azuredatabricks.net
+
+  staging:
+    workspace:
+      host: https://adb-8490988242777396.16.azuredatabricks.net
+
+  prod:
+    workspace:
+      host: https://adb-8490988242777396.16.azuredatabricks.net
+
+  test:
+    workspace:
+      host: https://adb-8490988242777396.16.azuredatabricks.net
+
