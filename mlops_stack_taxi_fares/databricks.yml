@@ -12,6 +12,12 @@ variables:
   model_name:
     description: Model name for the model training.
     default: ${var.schema_name}.${bundle.target}_mlops_stack_taxi_fares_model
+  endpoint_name:
+    description: Serving endpoint name for model deployment.
+    default: ${bundle.target}-nytaxifares
+  feature_table_prefix:
+    description: Prefix for feature table names to include environment.
+    default: ${bundle.target}
 
 include:
   # Assets folder contains ML artifact assets for the ml project that defines model and experiment

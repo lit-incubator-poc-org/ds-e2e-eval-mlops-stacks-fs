@@ -18,8 +18,8 @@ resources:
               experiment_name: ${var.experiment_name}
               model_name: ${var.model_name}
               schema_name: ${var.schema_name}
-              pickup_features_table: ${var.schema_name}.trip_pickup_features
-              dropoff_features_table: ${var.schema_name}.trip_dropoff_features
+              pickup_features_table: ${var.schema_name}.${var.feature_table_prefix}-trip_pickup_features
+              dropoff_features_table: ${var.schema_name}.${var.feature_table_prefix}-trip_dropoff_features
               # git source information of current ML asset deployment. It will be persisted as part of the workflow run
               git_source_info: url:${bundle.git.origin_url}; branch:${bundle.git.branch}; commit:${bundle.git.commit}
         - task_key: ModelValidation
@@ -71,6 +71,8 @@ resources:
             notebook_path: ../deployment/model_deployment/notebooks/ModelDeployment.py
             base_parameters:
               env: ${bundle.target}
+              endpoint_name: ${var.endpoint_name}
+              feature_table_prefix: ${var.feature_table_prefix}
               # git source information of current ML asset deployment. It will be persisted as part of the workflow run
               git_source_info: url:${bundle.git.origin_url}; branch:${bundle.git.branch}; commit:${bundle.git.commit}
         # Optional: Online Tables Deployment for Real-time Serving

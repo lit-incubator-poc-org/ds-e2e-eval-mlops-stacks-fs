@@ -26,6 +26,10 @@
 #
 # Name of the current environment
 dbutils.widgets.dropdown("env", "None", ["None", "staging", "prod"], "Environment Name")
+# Endpoint name (passed from bundle variables)
+dbutils.widgets.text("endpoint_name", "nytaxifares", "Endpoint Name")
+# Feature table prefix (passed from bundle variables)
+dbutils.widgets.text("feature_table_prefix", "dev-", "Feature Table Prefix")
 
 # COMMAND ----------
 
@@ -55,12 +59,19 @@ from deploy import deploy
 
 model_uri = dbutils.jobs.taskValues.get("Train", "model_uri", debugValue="")
 env = dbutils.widgets.get("env")
+endpoint_name = dbutils.widgets.get("endpoint_name")
+feature_table_prefix = dbutils.widgets.get("feature_table_prefix")
+
 assert env != "None", "env notebook parameter must be specified"
 assert model_uri != "", "model_uri notebook parameter must be specified"
-deploy(model_uri, env)
+
+# Deploy with environment-specific naming
+deploy(model_uri, env, endpoint_name, feature_table_prefix)
 
 # COMMAND ----------
 
 print(f"Successfully completed model deployment for {model_uri}")
-print("✅ Model deployed with online feature store enabled")
-print("🚀 Model is ready for real-time inference with low-latency feature lookups")
+print(f"SUCCESS: Model deployed to endpoint: {endpoint_name}")
+print(f"SUCCESS: Feature tables using prefix: {feature_table_prefix}")
+print("SUCCESS: Model deployed with online feature store enabled")
+print("SUCCESS: Model is ready for real-time inference with low-latency feature lookups")

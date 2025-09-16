@@ -13,13 +13,14 @@ from databricks.feature_engineering import FeatureEngineeringClient
 # PUBLIC FUNCTIONS (API Interface)
 # ============================================================================
 
-def create_online_tables(catalog_name: str = "p03", schema_name: str = "e2e_demo_simon") -> List[str]:
+def create_online_tables(catalog_name: str = "p03", schema_name: str = "e2e_demo_simon", feature_table_prefix: str = "") -> List[str]:
     """
     Create Databricks Online Tables for feature tables required by the model.
     Uses the modern Online Tables approach following Unity Catalog best practices.
     
     :param catalog_name: Unity Catalog name
     :param schema_name: Schema name containing feature tables
+    :param feature_table_prefix: Environment prefix for feature table names (e.g., 'dev', 'staging')
     :return: List of created online table names
     """
     from databricks.sdk import WorkspaceClient
@@ -28,17 +29,18 @@ def create_online_tables(catalog_name: str = "p03", schema_name: str = "e2e_demo
     # Initialize WorkspaceClient using Databricks CLI configuration
     workspace = WorkspaceClient()
     
-    # Feature tables used by the model
+    # Feature tables used by the model - with environment prefix
+    table_prefix = f"{feature_table_prefix}-" if feature_table_prefix else ""
     feature_tables = [
         {
-            "source": f"{catalog_name}.{schema_name}.trip_pickup_features",
-            "online": f"{catalog_name}.{schema_name}.trip_pickup_features_online",
-            "primary_keys": ["pickup_zip", "rounded_pickup_datetime"]
+            "source": f"{catalog_name}.{schema_name}.{table_prefix}trip_pickup_features",
+            "online": f"{catalog_name}.{schema_name}.{table_prefix}trip_pickup_features_online",
+            "primary_keys": ["zip", "tpep_pickup_datetime"]
         },
         {
-            "source": f"{catalog_name}.{schema_name}.trip_dropoff_features", 
-            "online": f"{catalog_name}.{schema_name}.trip_dropoff_features_online",
-            "primary_keys": ["dropoff_zip", "rounded_dropoff_datetime"]
+            "source": f"{catalog_name}.{schema_name}.{table_prefix}trip_dropoff_features", 
+            "online": f"{catalog_name}.{schema_name}.{table_prefix}trip_dropoff_features_online",
+            "primary_keys": ["zip", "tpep_dropoff_datetime"]
         }
     ]
     
@@ -114,13 +116,15 @@ def get_latest_model_version(client: MlflowClient, model_name: str) -> str:
         return "1"  # Fallback to version 1
 
 
-def deploy_with_online_tables(model_uri: str, env: str) -> Dict[str, Any]:
+def deploy_with_online_tables(model_uri: str, env: str, endpoint_name: str = "nytaxifares", feature_table_prefix: str = "") -> Dict[str, Any]:
     """
     Deploy the model to Unity Catalog registry with Online Tables for real-time inference.
     Creates serving endpoint with automatic feature lookup capabilities.
     
     :param model_uri: URI of the model in format "models://<name>/<version>" or just "<name>"
     :param env: Environment (dev, staging, prod)
+    :param endpoint_name: Name of the serving endpoint (should include environment prefix)
+    :param feature_table_prefix: Environment prefix for feature table names (e.g., 'dev', 'staging')
     :return: Deployment summary dictionary
     """
     from databricks.sdk import WorkspaceClient
@@ -141,14 +145,13 @@ def deploy_with_online_tables(model_uri: str, env: str) -> Dict[str, Any]:
     
     # Step 1: Create online tables for feature serving
     print("\nStep 1: Setting up Online Tables...")
-    online_tables = create_online_tables(catalog_name, schema_name)
+    online_tables = create_online_tables(catalog_name, schema_name, feature_table_prefix)
     
     # Step 2: Set model alias for deployment tracking
     alias = _set_model_alias(client, model_name, model_version, env)
     
     # Step 3: Create/Update serving endpoint
-    endpoint_name = "nytaxifares"
-    endpoint_config = _create_endpoint_config(model_name, model_version, catalog_name, schema_name)
+    endpoint_config = _create_endpoint_config(model_name, model_version, catalog_name, schema_name, endpoint_name)
     _create_or_update_endpoint(workspace, endpoint_name, endpoint_config, model_version, env)
     
     # Step 4: Verify endpoint status
@@ -169,16 +172,18 @@ def deploy_with_online_tables(model_uri: str, env: str) -> Dict[str, Any]:
     }
 
 
-def deploy(model_uri: str, env: str) -> Dict[str, Any]:
+def deploy(model_uri: str, env: str, endpoint_name: str = "nytaxifares", feature_table_prefix: str = "") -> Dict[str, Any]:
     """
     Legacy deploy function - now redirects to new online tables deployment.
     Maintained for backward compatibility.
     
     :param model_uri: URI of the model in format "models://<name>/<version>" or just "<name>"
     :param env: Environment (dev, staging, prod)
+    :param endpoint_name: Name of the serving endpoint (should include environment prefix)
+    :param feature_table_prefix: Environment prefix for feature table names (e.g., 'dev', 'staging')
     :return: Deployment summary dictionary
     """
-    return deploy_with_online_tables(model_uri, env)
+    return deploy_with_online_tables(model_uri, env, endpoint_name, feature_table_prefix)
 
 
 # ============================================================================
@@ -249,7 +254,7 @@ def _set_model_alias(client: MlflowClient, model_name: str, model_version: str, 
     return alias
 
 
-def _create_endpoint_config(model_name: str, model_version: str, catalog_name: str, schema_name: str) -> Any:
+def _create_endpoint_config(model_name: str, model_version: str, catalog_name: str, schema_name: str, endpoint_name: str) -> Any:
     """
     Create endpoint configuration for serving.
     
@@ -257,6 +262,7 @@ def _create_endpoint_config(model_name: str, model_version: str, catalog_name: s
     :param model_version: Model version
     :param catalog_name: Unity Catalog name
     :param schema_name: Schema name
+    :param endpoint_name: Name of the endpoint for table prefix
     :return: EndpointCoreConfigInput object
     """
     from databricks.sdk.service.serving import (
@@ -279,7 +285,7 @@ def _create_endpoint_config(model_name: str, model_version: str, catalog_name: s
         auto_capture_config=AutoCaptureConfigInput(
             catalog_name=catalog_name,
             schema_name=schema_name,
-            table_name_prefix="nytaxifares_endpoint"
+            table_name_prefix=f"{endpoint_name}_endpoint"
         )
     )
 
@@ -319,18 +325,10 @@ def _create_or_update_endpoint(workspace: Any, endpoint_name: str, endpoint_conf
             # Endpoint doesn't exist, create new one
             print(f"PROGRESS: Creating new endpoint: {endpoint_name}")
             
-            # Add tags for the new endpoint
-            endpoint_tags = [
-                {"key": "environment", "value": env},
-                {"key": "project", "value": "mlops-taxi-fare"},
-                {"key": "model_name", "value": endpoint_config.served_entities[0].entity_name.split(".")[-1]},
-                {"key": "model_version", "value": model_version}
-            ]
-            
+            # Create endpoint without tags to avoid SDK compatibility issues
             create_status = workspace.serving_endpoints.create_and_wait(
                 name=endpoint_name,
-                config=endpoint_config,
-                tags=endpoint_tags
+                config=endpoint_config
             )
             create_ready = create_status.state.ready.value if hasattr(create_status.state.ready, 'value') else str(create_status.state.ready)
             create_config = create_status.state.config_update.value if hasattr(create_status.state.config_update, 'value') else str(create_status.state.config_update)
